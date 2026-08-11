@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "WEARO",
+    "slug": "wearo-frontend",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "wearo",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#F7F2EA"
+      }
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "extra": {
+      "apiBaseUrl": ""
+    },
+    "plugins": ["expo-secure-store"]
+  }
+}
