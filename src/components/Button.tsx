@@ -1,5 +1,7 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, ViewStyle } from "react-native";
 
+import { colors, radius, typography } from "../theme";
+
 type ButtonProps = {
   title: string;
   onPress: () => void;
@@ -44,31 +46,30 @@ export function Button({
 const styles = StyleSheet.create({
   base: {
     alignItems: "center",
-    borderRadius: 8,
+    borderRadius: radius.pill,
     minHeight: 50,
     justifyContent: "center",
     paddingHorizontal: 18
   },
   primary: {
-    backgroundColor: "#20201E"
+    backgroundColor: colors.primary
   },
   secondary: {
-    backgroundColor: "#FFFFFF",
-    borderColor: "#D8D0C4",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
     borderWidth: 1
   },
   disabled: {
-    opacity: 0.55
+    opacity: 0.88
   },
   pressed: {
     opacity: 0.82
   },
   text: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "700"
+    ...typography.button,
+    color: colors.surface
   },
   secondaryText: {
-    color: "#20201E"
+    color: colors.text
   }
 });

@@ -1,124 +1,316 @@
-import { StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useEffect, useState } from "react";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { useAuth } from "../auth/AuthContext";
-import { Button } from "../components/Button";
+import { RecommendationCard } from "../components/RecommendationCard";
+import { ScreenContainer } from "../components/ScreenContainer";
+import { useResponsive } from "../hooks/useResponsive";
+import type { AppScreen } from "../navigation/types";
+import { AIStylistService, SuggestedPrompt } from "../services/AIStylistService";
+import { OutfitRecommendation, RecommendationService } from "../services/RecommendationService";
+import { colors, radius, shadows, spacing, typography } from "../theme";
 
-export function HomeScreen() {
-  const { user, logout } = useAuth();
+type HomeScreenProps = {
+  onNavigate: (screen: AppScreen) => void;
+};
 
-  if (!user) {
-    return null;
-  }
+export function HomeScreen({ onNavigate }: HomeScreenProps) {
+  const { user } = useAuth();
+  const { usesSidebar } = useResponsive();
+  const [recommendation, setRecommendation] = useState<OutfitRecommendation | null>(null);
+  const [prompts, setPrompts] = useState<SuggestedPrompt[]>([]);
 
-  const fullName = `${user.first_name} ${user.last_name}`.trim();
+  useEffect(() => {
+    RecommendationService.getTodayRecommendation().then(setRecommendation);
+    AIStylistService.suggestedPrompts().then(setPrompts);
+  }, []);
+
+  const firstName = user?.first_name || "there";
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.brand}>WEARO</Text>
-          <Text style={styles.title}>Your profile</Text>
-          <Text style={styles.subtitle}>
-            The auth foundation is connected. Styling features will build from here.
-          </Text>
+    <ScreenContainer>
+      <View style={[styles.layout, usesSidebar && styles.desktopLayout]}>
+        <View style={styles.mainColumn}>
+          <View style={styles.hero}>
+            <Text style={styles.kicker}>Your wardrobe. Your style. Perfected by AI.</Text>
+            <Text style={styles.title}>Good morning,{"\n"}{firstName} 👋</Text>
+            <View style={styles.promptBar}>
+              <TextInput
+                accessibilityLabel="Ask WEARO what to wear"
+                onFocus={() => onNavigate("ask")}
+                placeholder="What should I wear today?"
+                placeholderTextColor={colors.textSoft}
+                style={styles.promptInput}
+              />
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => onNavigate("ask")}
+                style={styles.promptButton}
+              >
+                <Text style={styles.promptButtonText}>✦</Text>
+              </Pressable>
+            </View>
+          </View>
+
+          {recommendation ? (
+            <RecommendationCard recommendation={recommendation} />
+          ) : (
+            <View style={styles.loadingCard}>
+              <Text style={styles.loadingTitle}>WEARO is styling your day</Text>
+              <Text style={styles.loadingText}>Checking wardrobe, weather, and recent looks.</Text>
+            </View>
+          )}
         </View>
 
-        <View style={styles.profileCard}>
-          <Text style={styles.name}>{fullName || "WEARO user"}</Text>
-          <Text style={styles.email}>{user.email}</Text>
+        <View style={styles.sideColumn}>
+          <View style={styles.panel}>
+            <Text style={styles.panelTitle}>Quick actions</Text>
+            <View style={styles.quickActions}>
+              <QuickAction
+                description="Describe plans and get outfit ideas."
+                label="Ask WEARO"
+                onPress={() => onNavigate("ask")}
+                symbol="✦"
+              />
+              <QuickAction
+                description="Prepare the simple capture flow."
+                label="Add Clothes"
+                onPress={() => onNavigate("wardrobe")}
+                symbol="+"
+              />
+              <QuickAction
+                description="Save looks and avoid repeats."
+                label="Plan an Outfit"
+                onPress={() => onNavigate("outfits")}
+                symbol="◇"
+              />
+            </View>
+          </View>
 
-          <View style={styles.details}>
-            <Detail label="Timezone" value={user.timezone || "Not set"} />
-            <Detail label="Country" value={user.country_code || "Not set"} />
-            <Detail label="Preferred city" value={user.preferred_city || "Not set"} />
+          <View style={styles.panel}>
+            <Text style={styles.panelTitle}>Suggested prompts</Text>
+            <View style={styles.promptList}>
+              {prompts.map((prompt) => (
+                <Pressable
+                  accessibilityRole="button"
+                  key={prompt.id}
+                  onPress={() => onNavigate("ask")}
+                  style={({ pressed }) => [styles.suggestedPrompt, pressed && styles.pressed]}
+                >
+                  <Text style={styles.suggestedPromptText}>{prompt.text}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.panel}>
+            <Text style={styles.panelTitle}>Recent looks</Text>
+            <View style={styles.recentLookRow}>
+              {["15 Aug", "13 Aug", "11 Aug"].map((date) => (
+                <View key={date} style={styles.recentLook}>
+                  <View style={styles.recentSwatches}>
+                    <View style={[styles.miniSwatch, { backgroundColor: "#7A5330" }]} />
+                    <View style={[styles.miniSwatch, { backgroundColor: "#222222" }]} />
+                    <View style={[styles.miniSwatch, { backgroundColor: "#F7F7F7" }]} />
+                  </View>
+                  <Text style={styles.recentDate}>{date}</Text>
+                </View>
+              ))}
+            </View>
           </View>
         </View>
-
-        <Button onPress={logout} title="Logout" variant="secondary" />
       </View>
-    </SafeAreaView>
+    </ScreenContainer>
   );
 }
 
-function Detail({ label, value }: { label: string; value: string }) {
+function QuickAction({
+  description,
+  label,
+  onPress,
+  symbol
+}: {
+  description: string;
+  label: string;
+  onPress: () => void;
+  symbol: string;
+}) {
   return (
-    <View style={styles.detailRow}>
-      <Text style={styles.detailLabel}>{label}</Text>
-      <Text style={styles.detailValue}>{value}</Text>
-    </View>
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.quickAction, pressed && styles.pressed]}
+    >
+      <View style={styles.quickIcon}>
+        <Text style={styles.quickIconText}>{symbol}</Text>
+      </View>
+      <View style={styles.quickText}>
+        <Text style={styles.quickLabel}>{label}</Text>
+        <Text style={styles.quickDescription}>{description}</Text>
+      </View>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    backgroundColor: "#F7F2EA",
-    flex: 1
+  layout: {
+    gap: spacing.xl
   },
-  container: {
+  desktopLayout: {
+    alignItems: "flex-start",
+    flexDirection: "row"
+  },
+  mainColumn: {
     flex: 1,
-    gap: 22,
-    padding: 22
+    gap: spacing.xl,
+    minWidth: 0
   },
-  header: {
-    gap: 10,
-    paddingTop: 16
+  sideColumn: {
+    gap: spacing.lg,
+    width: "100%",
+    maxWidth: 360
   },
-  brand: {
-    color: "#7A5330",
-    fontSize: 14,
-    fontWeight: "800",
-    letterSpacing: 0
+  hero: {
+    gap: spacing.md
+  },
+  kicker: {
+    ...typography.caption,
+    color: colors.primary
   },
   title: {
-    color: "#20201E",
-    fontSize: 34,
-    fontWeight: "800",
-    letterSpacing: 0,
-    lineHeight: 40
+    ...typography.display,
+    color: colors.text
   },
-  subtitle: {
-    color: "#5F574E",
-    fontSize: 16,
-    lineHeight: 23
+  promptBar: {
+    ...shadows.soft,
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderRadius: radius.pill,
+    flexDirection: "row",
+    gap: spacing.sm,
+    minHeight: 56,
+    paddingLeft: spacing.lg,
+    paddingRight: spacing.xs
   },
-  profileCard: {
-    backgroundColor: "#FAF8F3",
-    borderColor: "#E4DACE",
-    borderRadius: 8,
-    borderWidth: 1,
-    gap: 16,
-    padding: 18
+  promptInput: {
+    ...typography.body,
+    color: colors.text,
+    flex: 1,
+    minHeight: 52
   },
-  name: {
-    color: "#20201E",
-    fontSize: 24,
+  promptButton: {
+    alignItems: "center",
+    backgroundColor: colors.primary,
+    borderRadius: radius.pill,
+    height: 44,
+    justifyContent: "center",
+    width: 44
+  },
+  promptButtonText: {
+    color: colors.surface,
+    fontSize: 22,
     fontWeight: "800"
   },
-  email: {
-    color: "#5F574E",
-    fontSize: 16
+  loadingCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    gap: spacing.xs,
+    padding: spacing.xl
   },
-  details: {
-    borderTopColor: "#E4DACE",
-    borderTopWidth: 1,
-    gap: 12,
-    paddingTop: 16
+  loadingTitle: {
+    ...typography.subheading,
+    color: colors.text
   },
-  detailRow: {
+  loadingText: {
+    ...typography.body,
+    color: colors.textMuted
+  },
+  panel: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    gap: spacing.md,
+    padding: spacing.lg
+  },
+  panelTitle: {
+    ...typography.subheading,
+    color: colors.text,
+    fontSize: 17
+  },
+  quickActions: {
+    gap: spacing.sm
+  },
+  quickAction: {
+    alignItems: "center",
+    borderRadius: radius.md,
     flexDirection: "row",
-    gap: 16,
-    justifyContent: "space-between"
+    gap: spacing.sm,
+    paddingVertical: spacing.xs
   },
-  detailLabel: {
-    color: "#6B6156",
-    fontSize: 14,
-    fontWeight: "700"
+  quickIcon: {
+    alignItems: "center",
+    backgroundColor: "#F0EEFF",
+    borderRadius: radius.md,
+    height: 42,
+    justifyContent: "center",
+    width: 42
   },
-  detailValue: {
-    color: "#20201E",
+  quickIconText: {
+    color: colors.primary,
+    fontSize: 22,
+    fontWeight: "800"
+  },
+  quickText: {
+    flex: 1
+  },
+  quickLabel: {
+    ...typography.button,
+    color: colors.text
+  },
+  quickDescription: {
+    ...typography.caption,
+    color: colors.textMuted,
+    fontWeight: "500"
+  },
+  promptList: {
+    gap: spacing.xs
+  },
+  suggestedPrompt: {
+    backgroundColor: colors.background,
+    borderRadius: radius.md,
+    padding: spacing.sm
+  },
+  suggestedPromptText: {
+    ...typography.body,
+    color: colors.text
+  },
+  recentLookRow: {
+    flexDirection: "row",
+    gap: spacing.sm
+  },
+  recentLook: {
+    backgroundColor: colors.background,
+    borderRadius: radius.md,
     flex: 1,
-    fontSize: 14,
-    textAlign: "right"
+    gap: spacing.xs,
+    padding: spacing.xs
+  },
+  recentSwatches: {
+    flexDirection: "row",
+    gap: 3
+  },
+  miniSwatch: {
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    flex: 1,
+    height: 34
+  },
+  recentDate: {
+    ...typography.caption,
+    color: colors.textMuted,
+    textAlign: "center"
+  },
+  pressed: {
+    opacity: 0.75
   }
 });

@@ -3,8 +3,8 @@ import { StatusBar } from "expo-status-bar";
 
 import { AuthProvider, useAuth } from "./src/auth/AuthContext";
 import { LoadingScreen } from "./src/components/LoadingScreen";
+import { AppShell } from "./src/navigation/AppShell";
 import { AuthScreen } from "./src/screens/AuthScreen";
-import { HomeScreen } from "./src/screens/HomeScreen";
 
 function AppContent() {
   const { isInitializing, user } = useAuth();
@@ -13,7 +13,7 @@ function AppContent() {
     return <LoadingScreen />;
   }
 
-  return user ? <HomeScreen /> : <AuthScreen />;
+  return user ? <AppShell /> : <AuthScreen />;
 }
 
 export default function App() {
