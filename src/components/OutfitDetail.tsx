@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { Bookmark, ImageIcon, ThumbsDown, ThumbsUp, UserRound, X } from "lucide-react-native";
+import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Bookmark, ImageIcon, Scan, ShieldCheck, Shirt, Sun, ThumbsDown, ThumbsUp, UserRound, X } from "lucide-react-native";
 
 import { AppService, resolveImageUrl } from "../api/AppService";
 import type { DislikeReason, FeedbackReaction, MetadataOption, Outfit, OutfitStatus, OutfitVisualization, VisualizationMode } from "../api/types";
@@ -34,6 +34,8 @@ export function OutfitDetail({ initialOutfit, roles, onChange }: { initialOutfit
   const [visualization, setVisualization] = useState<OutfitVisualization | null>(null);
   const [storedVisualizations, setStoredVisualizations] = useState<Partial<Record<VisualizationMode, OutfitVisualization>>>({});
   const [isSaving, setIsSaving] = useState(false);
+  const [showTryOnSetup, setShowTryOnSetup] = useState(false);
+  const [tryOnStage, setTryOnStage] = useState<"uploading" | "creating" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -107,7 +109,8 @@ export function OutfitDetail({ initialOutfit, roles, onChange }: { initialOutfit
 
   async function createVisualization() {
     if (mode === "try_on" && !user?.full_body_image) {
-      await uploadPhotoAndCreateTryOn();
+      setError(null);
+      setShowTryOnSetup(true);
       return;
     }
 
@@ -121,12 +124,22 @@ export function OutfitDetail({ initialOutfit, roles, onChange }: { initialOutfit
     const image = await pickWardrobeImage("gallery");
     if (!image) return;
 
-    await run(async () => {
+    setIsSaving(true);
+    setError(null);
+    setTryOnStage("uploading");
+    try {
       await updateFullBodyImage(image);
+      setTryOnStage("creating");
       const response = await AppService.createVisualization(outfit.id, "try_on");
       setMode("try_on");
       rememberVisualization(response.data);
-    });
+      setShowTryOnSetup(false);
+    } catch (caughtError) {
+      setError(messageFor(caughtError));
+    } finally {
+      setTryOnStage(null);
+      setIsSaving(false);
+    }
   }
 
   function chooseVisualizationMode(nextMode: VisualizationMode) {
@@ -150,7 +163,7 @@ export function OutfitDetail({ initialOutfit, roles, onChange }: { initialOutfit
     finally { setIsSaving(false); }
   }
 
-  return <View style={[styles.layout, !usesWideDetailLayout && styles.stackedLayout]}>
+  return <><View style={[styles.layout, !usesWideDetailLayout && styles.stackedLayout]}>
     <View style={[styles.visualColumn, !usesWideDetailLayout && styles.stackedVisualColumn]}>
       <View style={styles.visualControls}>
         <View style={styles.visualControlHeader}><View><Text style={styles.visualControlTitle}>{copy.visualization.title}</Text><Text style={styles.showcaseHint}>Choose how you want to see this outfit.</Text></View><View style={styles.actions}><StatusAction active={mode === "flat_lay"} icon={<ImageIcon color={mode === "flat_lay" ? colors.primary : colors.textMuted} size={18} />} label={copy.visualization.flatLay} onPress={() => chooseVisualizationMode("flat_lay")} /><StatusAction active={mode === "try_on"} icon={<UserRound color={mode === "try_on" ? colors.primary : colors.textMuted} size={18} />} label={copy.visualization.tryOn} onPress={() => chooseVisualizationMode("try_on")} /></View></View>
@@ -172,8 +185,27 @@ export function OutfitDetail({ initialOutfit, roles, onChange }: { initialOutfit
 
       {error ? <View style={styles.error}><Text style={styles.errorText}>{error}</Text></View> : null}
     </View>
-  </View>;
+  </View><TryOnSetupModal error={error} onClose={() => { if (!tryOnStage) setShowTryOnSetup(false); }} onConfirm={() => void uploadPhotoAndCreateTryOn()} stage={tryOnStage} visible={showTryOnSetup} /></>;
 }
+
+function TryOnSetupModal({ error, onClose, onConfirm, stage, visible }: { error: string | null; onClose: () => void; onConfirm: () => void; stage: "uploading" | "creating" | null; visible: boolean }) {
+  const busy = stage !== null;
+  return <Modal animationType="fade" onRequestClose={onClose} transparent visible={visible}>
+    <View style={styles.modalBackdrop}>
+      <View accessibilityLabel="Try-on photo setup" accessibilityRole="summary" style={styles.tryOnDialog}>
+        <View style={styles.dialogHeader}><View style={styles.dialogTitleRow}><View style={styles.dialogIcon}><UserRound color={colors.primary} size={22} /></View><View style={styles.dialogTitleCopy}><Text style={styles.dialogTitle}>Set up your try-on</Text><Text style={styles.dialogSubtitle}>Choose a clear full-body photo to create a personalized view of this outfit.</Text></View></View><Pressable accessibilityLabel="Close try-on setup" disabled={busy} onPress={onClose} style={styles.closeButton}><X color={colors.textMuted} size={20} /></Pressable></View>
+        <View style={styles.photoGuide}><Text style={styles.photoGuideTitle}>For the best result</Text><PhotoTip icon={<Scan color={colors.primary} size={18} />} text="Stand facing the camera with your full body visible, including your feet." /><PhotoTip icon={<Sun color={colors.primary} size={18} />} text="Use even front lighting and a simple, uncluttered background." /><PhotoTip icon={<Shirt color={colors.primary} size={18} />} text="Wear fitted everyday clothes and keep your arms visible at your sides." /></View>
+        <View style={styles.privacyNote}><ShieldCheck color={colors.primary} size={20} /><Text style={styles.privacyText}>Your photo will be saved as your private profile reference and reused only when you request future AI try-ons.</Text></View>
+        <Text style={styles.fileHint}>JPEG, PNG, or WebP up to 10 MB.</Text>
+        {busy ? <View style={styles.progressSection}><View style={styles.progressTrack}><View style={[styles.progressFill, stage === "uploading" ? styles.progressUploading : styles.progressCreating]} /></View><Text style={styles.progressLabel}>{stage === "uploading" ? "Saving your photo..." : "Starting your try-on..."}</Text></View> : null}
+        {error ? <View style={styles.error}><Text style={styles.errorText}>{error}</Text></View> : null}
+        <View style={styles.dialogActions}><Button disabled={busy} onPress={onClose} style={styles.dialogAction} title="Cancel" variant="secondary" /><Button loading={busy} onPress={onConfirm} style={styles.dialogAction} title={busy ? "Preparing try-on" : "Choose photo and visualize"} /></View>
+      </View>
+    </View>
+  </Modal>;
+}
+
+function PhotoTip({ icon, text }: { icon: React.ReactNode; text: string }) { return <View style={styles.photoTip}><View style={styles.photoTipIcon}>{icon}</View><Text style={styles.photoTipText}>{text}</Text></View>; }
 
 function Section({ children, title }: { children: React.ReactNode; title: string }) { return <View style={styles.section}><Text style={styles.sectionTitle}>{title}</Text>{children}</View>; }
 function OutfitItems({ outfit, roles }: { outfit: Outfit; roles: MetadataOption[] }) { return <View style={styles.gallery}>{[...outfit.items].sort((a, b) => a.position - b.position).map((item) => { const url = resolveImageUrl(item.clothing_item.cover_image?.url); return <View key={item.id} style={styles.item}>{url ? <AuthenticatedImage resizeMode="cover" url={item.clothing_item.cover_image?.url} style={styles.image} /> : <View style={styles.placeholder}><Text style={styles.placeholderText}>W</Text></View>}<View style={styles.itemCopy}><Text style={styles.role}>{labelFor(roles, item.role)}</Text><Text numberOfLines={1} style={styles.itemName}>{item.clothing_item.name || item.clothing_item.subcategory || "Clothing item"}</Text></View></View>; })}</View>; }
@@ -198,5 +230,6 @@ function messageFor(error: unknown) { return error instanceof Error ? error.mess
 const styles = StyleSheet.create({
   layout: { alignItems: "flex-start", flexDirection: "row", gap: spacing.xl, width: "100%" }, stackedLayout: { flexDirection: "column" }, visualColumn: { flex: 1.35, gap: spacing.md, minWidth: 0 }, stackedVisualColumn: { flexBasis: "auto", flexGrow: 0, flexShrink: 0, width: "100%" }, visualControls: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, borderWidth: 1, gap: spacing.sm, padding: spacing.md }, visualControlHeader: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, justifyContent: "space-between" }, visualControlTitle: { ...typography.subheading, color: colors.text }, showcase: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, borderWidth: 1, overflow: "hidden" }, showcaseImage: { aspectRatio: 0.82, backgroundColor: colors.surfaceMuted, width: "100%" }, showcaseCaption: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, justifyContent: "space-between", padding: spacing.md }, showcaseHint: { ...typography.caption, color: colors.textMuted }, itemsSection: { gap: spacing.sm }, itemsSectionTitle: { ...typography.subheading, color: colors.text }, gallery: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, minWidth: 0, width: "100%" }, item: { backgroundColor: colors.surfaceMuted, borderRadius: radius.md, flexGrow: 1, minWidth: 90, overflow: "hidden", width: "30%" }, image: { aspectRatio: 0.82, width: "100%" }, placeholder: { alignItems: "center", aspectRatio: 0.82, backgroundColor: "#EFECFF", justifyContent: "center" }, placeholderText: { color: colors.primary, fontSize: 32, fontWeight: "800" }, itemCopy: { gap: 2, padding: spacing.sm }, role: { ...typography.caption, color: colors.primary }, itemName: { ...typography.caption, color: colors.text, fontWeight: "700" },
   panel: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, borderWidth: 1, flex: 1, gap: spacing.lg, minWidth: 340, padding: spacing.xl }, stackedPanel: { flexBasis: "auto", flexGrow: 0, flexShrink: 0, minWidth: 0, width: "100%" }, badges: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }, badge: { backgroundColor: "#EFECFF", borderRadius: radius.pill, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs }, badgeText: { ...typography.caption, color: colors.primary }, explanation: { ...typography.body, color: colors.textMuted, maxWidth: 720 }, actions: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }, action: { alignItems: "center", borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, flexDirection: "row", gap: spacing.xs, minHeight: 42, paddingHorizontal: spacing.sm }, actionActive: { backgroundColor: "#EFECFF", borderColor: colors.primary }, actionText: { ...typography.caption, color: colors.textMuted }, actionTextActive: { color: colors.primary },
-  section: { borderTopColor: colors.border, borderTopWidth: 1, gap: spacing.sm, paddingTop: spacing.lg }, sectionTitle: { ...typography.subheading, color: colors.text }, twoColumns: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }, field: { flex: 1, gap: spacing.xs, minWidth: 120 }, label: { ...typography.caption, color: colors.textMuted }, input: { ...typography.body, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, color: colors.text, minHeight: 46, outlineStyle: "none", paddingHorizontal: spacing.md } as never, chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }, chip: { borderColor: colors.border, borderRadius: radius.pill, borderWidth: 1, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs }, chipActive: { backgroundColor: "#EFECFF", borderColor: colors.primary }, chipText: { ...typography.caption, color: colors.textMuted }, chipTextActive: { color: colors.primary }, note: { ...typography.body, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, color: colors.text, minHeight: 80, outlineStyle: "none", padding: spacing.md, textAlignVertical: "top" } as never, count: { ...typography.caption, color: colors.textSoft, textAlign: "right" }, hint: { ...typography.caption, color: colors.textMuted }, error: { backgroundColor: "#FFF0ED", borderRadius: radius.md, padding: spacing.md }, errorText: { ...typography.caption, color: colors.error }
+  section: { borderTopColor: colors.border, borderTopWidth: 1, gap: spacing.sm, paddingTop: spacing.lg }, sectionTitle: { ...typography.subheading, color: colors.text }, twoColumns: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }, field: { flex: 1, gap: spacing.xs, minWidth: 120 }, label: { ...typography.caption, color: colors.textMuted }, input: { ...typography.body, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, color: colors.text, minHeight: 46, outlineStyle: "none", paddingHorizontal: spacing.md } as never, chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }, chip: { borderColor: colors.border, borderRadius: radius.pill, borderWidth: 1, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs }, chipActive: { backgroundColor: "#EFECFF", borderColor: colors.primary }, chipText: { ...typography.caption, color: colors.textMuted }, chipTextActive: { color: colors.primary }, note: { ...typography.body, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, color: colors.text, minHeight: 80, outlineStyle: "none", padding: spacing.md, textAlignVertical: "top" } as never, count: { ...typography.caption, color: colors.textSoft, textAlign: "right" }, hint: { ...typography.caption, color: colors.textMuted }, error: { backgroundColor: "#FFF0ED", borderRadius: radius.md, padding: spacing.md }, errorText: { ...typography.caption, color: colors.error },
+  modalBackdrop: { alignItems: "center", backgroundColor: "rgba(21, 19, 35, 0.58)", flex: 1, justifyContent: "center", padding: spacing.lg }, tryOnDialog: { backgroundColor: colors.surface, borderRadius: radius.lg, gap: spacing.md, maxWidth: 560, padding: spacing.xl, width: "100%" }, dialogHeader: { alignItems: "flex-start", flexDirection: "row", gap: spacing.sm, justifyContent: "space-between" }, dialogTitleRow: { alignItems: "flex-start", flex: 1, flexDirection: "row", gap: spacing.sm }, dialogIcon: { alignItems: "center", backgroundColor: "#EFECFF", borderRadius: radius.md, height: 44, justifyContent: "center", width: 44 }, dialogTitleCopy: { flex: 1, gap: spacing.xs }, dialogTitle: { ...typography.subheading, color: colors.text }, dialogSubtitle: { ...typography.body, color: colors.textMuted }, closeButton: { alignItems: "center", height: 40, justifyContent: "center", width: 40 }, photoGuide: { backgroundColor: colors.surfaceMuted, borderRadius: radius.md, gap: spacing.sm, padding: spacing.md }, photoGuideTitle: { ...typography.caption, color: colors.text, fontWeight: "800" }, photoTip: { alignItems: "center", flexDirection: "row", gap: spacing.sm }, photoTipIcon: { alignItems: "center", height: 24, justifyContent: "center", width: 24 }, photoTipText: { ...typography.caption, color: colors.textMuted, flex: 1 }, privacyNote: { alignItems: "flex-start", flexDirection: "row", gap: spacing.sm }, privacyText: { ...typography.caption, color: colors.textMuted, flex: 1 }, fileHint: { ...typography.caption, color: colors.textSoft }, progressSection: { gap: spacing.xs }, progressTrack: { backgroundColor: "#E7E3FA", borderRadius: radius.pill, height: 8, overflow: "hidden", width: "100%" }, progressFill: { backgroundColor: colors.primary, borderRadius: radius.pill, height: "100%" }, progressUploading: { width: "48%" }, progressCreating: { width: "86%" }, progressLabel: { ...typography.caption, color: colors.primary }, dialogActions: { alignItems: "stretch", flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, justifyContent: "flex-end" }, dialogAction: { flex: 1, minWidth: 190 }
 });

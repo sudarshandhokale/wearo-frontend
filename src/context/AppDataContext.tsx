@@ -17,13 +17,14 @@ const AppDataContext = createContext<AppDataContextValue | null>(null);
 
 export function AppDataProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const userId = user?.id ?? null;
   const [metadata, setMetadata] = useState<AppMetadata | null>(null);
   const [styleProfile, setStyleProfile] = useState<StyleProfile | null>(null);
   const [isLoading, setIsLoading] = useState(Boolean(user));
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!user) {
+    if (userId == null) {
       setMetadata(null);
       setStyleProfile(null);
       setIsLoading(false);
@@ -44,7 +45,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [user]);
+  }, [userId]);
 
   useEffect(() => {
     void refresh();
