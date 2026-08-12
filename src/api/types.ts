@@ -196,6 +196,7 @@ export type OutfitItem = {
 export type Outfit = {
   id: number | string;
   recommendation_request_id: number | string | null;
+  name: string;
   prompt: string;
   occasion: string | null;
   context: Record<string, unknown>;
@@ -248,7 +249,14 @@ export type PackingItem = { clothing_item_id?: number | string; name?: string; w
 export type StylingPlan = { id: number | string; plan_type: StylingPlanType; status: "processing" | "completed" | "failed"; city: string | null; country_code: string | null; start_date: string; end_date: string; prompt: string | null; weather_context: Record<string, unknown>; packing_summary: { days?: number; unique_item_count?: number; items?: PackingItem[]; gaps?: unknown[]; [key: string]: unknown }; failure_code: string | null; completed_at: string | null; entries: StylingPlanEntry[]; created_at: string; updated_at: string };
 
 export type VisualizationMode = "flat_lay" | "try_on";
-export type OutfitVisualization = { id: number | string; outfit_id: number | string; mode: VisualizationMode; status: "queued" | "processing" | "ready" | "failed"; provider: string | null; model: string | null; metadata: Record<string, unknown>; failure_code: string | null; image: ApiImage | null; completed_at: string | null; created_at: string; updated_at: string };
+export type VisualizationGuidance = {
+  personalized: boolean;
+  profile_photo_available: boolean;
+  fallback_from_try_on: boolean;
+  action: "upload_full_body_photo" | null;
+  message: string;
+};
+export type OutfitVisualization = { id: number | string; outfit_id: number | string; mode: VisualizationMode; status: "queued" | "processing" | "ready" | "failed"; provider: string | null; model: string | null; metadata: Record<string, unknown>; guidance: VisualizationGuidance; failure_code: string | null; image: ApiImage | null; completed_at: string | null; created_at: string; updated_at: string };
 
 export type OutfitStatus = "recommended" | "saved" | "worn" | "dismissed";
 

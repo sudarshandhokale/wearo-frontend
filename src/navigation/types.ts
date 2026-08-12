@@ -17,6 +17,7 @@ export const mobileNavItems: NavItem[] = [
   { key: "home", label: "Home" },
   { key: "wardrobe", label: "Wardrobe" },
   { key: "ask", label: "Ask" },
+  { key: "outfits", label: "Outfits" },
   { key: "history", label: "History" },
   { key: "profile", label: "Profile" }
 ];

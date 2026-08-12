@@ -26,6 +26,19 @@ export const copy = {
     reanalyze: "Reanalyze",
     edit: "Edit item"
   },
+  visualization: {
+    title: "Visualize this look",
+    flatLay: "Flat lay",
+    tryOn: "Try on",
+    disclaimer: "AI creates styling inspiration and may not reproduce garments or fit exactly.",
+    flatLayHint: "Creates a clean image of the complete outfit from your wardrobe photos.",
+    tryOnHint: "Uses your saved full-body photo to create a personalized visualization.",
+    missingPhotoHint: "Upload a full-body photo to visualize this outfit on you. You can remove it from your profile at any time.",
+    create: "Create visualization",
+    uploadAndCreate: "Upload photo and visualize",
+    creating: "Creating visualization",
+    failed: "The visualization could not be created. Please try again."
+  },
   common: {
     notSet: "Not set",
     score: "Match"

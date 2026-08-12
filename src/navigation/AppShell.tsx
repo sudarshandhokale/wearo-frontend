@@ -212,7 +212,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     bottom: spacing.md,
     flexDirection: "row",
-    gap: spacing.xs,
+    gap: 2,
     justifyContent: "space-between",
     left: spacing.md,
     paddingHorizontal: spacing.xs,
@@ -225,7 +225,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     flex: 1,
     gap: 2,
-    minHeight: 58,
+    minHeight: 56,
+    minWidth: 0,
     justifyContent: "center"
   },
   bottomButtonActive: {
@@ -238,7 +239,7 @@ const styles = StyleSheet.create({
   bottomLabel: {
     ...typography.caption,
     color: colors.textMuted,
-    fontSize: 10
+    fontSize: 9
   },
   navLabelActive: {
     color: colors.primary
