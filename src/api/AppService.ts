@@ -12,6 +12,7 @@ import type {
   PaginationMeta,
   RecommendationRequest,
   StylingPlan,
+  ConversationalStylingPlanInput,
   StylingPlanInput,
   RecommendationResponse,
   StyleProfile,
@@ -149,10 +150,13 @@ export const AppService = {
   async reanalyzeClothingItem(id: ClothingItem["id"]) {
     return RestService.POST<ClothingItem>(`/api/v1/clothing_items/${id}/reanalyze`, undefined, await token());
   },
-  async recommendations(prompt: string, city?: string) {
+  async polishClothingItem(id: ClothingItem["id"]) {
+    return RestService.POST<ClothingItem>(`/api/v1/clothing_items/${id}/polish`, undefined, await token());
+  },
+  async recommendations(prompt: string) {
     return RestService.POST<RecommendationResponse>(
       "/api/v1/stylist/recommendations",
-      { prompt, ...(city?.trim() ? { city: city.trim() } : {}) },
+      { prompt },
       await token()
     );
   },
@@ -198,7 +202,7 @@ export const AppService = {
   async stylingPlan(id: StylingPlan["id"]) {
     return RestService.GET<StylingPlan>(`/api/v1/styling_plans/${id}`, await token());
   },
-  async createStylingPlan(input: StylingPlanInput) {
+  async createStylingPlan(input: StylingPlanInput | ConversationalStylingPlanInput) {
     return RestService.POST<StylingPlan>("/api/v1/styling_plans", { styling_plan: input }, await token());
   },
   async visualizations(outfitId: Outfit["id"]) {
@@ -208,11 +212,10 @@ export const AppService = {
     return RestService.GET<OutfitVisualization>(`/api/v1/outfits/${outfitId}/visualizations/${id}`, await token());
   },
   async createVisualization(outfitId: Outfit["id"], mode: VisualizationMode, referenceImage?: PickedImage | null) {
-    if (!referenceImage) return RestService.POST<OutfitVisualization>(`/api/v1/outfits/${outfitId}/visualizations`, { visualization: { mode } }, await token());
     const form = new FormData();
     form.append("visualization[mode]", mode);
-    if (Platform.OS === "web") { const blob = await fetch(referenceImage.uri).then((response) => response.blob()); form.append("visualization[reference_image]", blob, referenceImage.name); }
-    else form.append("visualization[reference_image]", { uri: referenceImage.uri, name: referenceImage.name, type: referenceImage.mimeType } as unknown as Blob);
+    if (referenceImage && Platform.OS === "web") { const blob = await fetch(referenceImage.uri).then((response) => response.blob()); form.append("visualization[reference_image]", blob, referenceImage.name); }
+    else if (referenceImage) form.append("visualization[reference_image]", { uri: referenceImage.uri, name: referenceImage.name, type: referenceImage.mimeType } as unknown as Blob);
     return RestService.POST_FORM<OutfitVisualization>(`/api/v1/outfits/${outfitId}/visualizations`, form, await token());
   }
 };

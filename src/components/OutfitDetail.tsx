@@ -130,6 +130,7 @@ export function OutfitDetail({ initialOutfit, roles, onChange }: { initialOutfit
   const showcaseVisualization = visualization?.status === "ready" && visualization.image?.url
     ? visualization
     : preferredReadyVisualization(storedVisualizations);
+  const showcaseUrl = showcaseVisualization?.image?.url || outfit.cover_image?.url;
 
   async function run(action: () => Promise<void>) {
     setIsSaving(true); setError(null);
@@ -146,7 +147,7 @@ export function OutfitDetail({ initialOutfit, roles, onChange }: { initialOutfit
         {visualization?.guidance?.message ? <Text style={styles.hint}>{visualization.guidance.message}</Text> : null}
         {visualization?.status === "failed" ? <Text style={styles.errorText}>{copy.visualization.failed}</Text> : null}
       </View>
-      {showcaseVisualization?.image?.url ? <><View style={styles.showcase}><AuthenticatedImage resizeMode="contain" url={showcaseVisualization.image.url} style={styles.showcaseImage} /><View style={styles.showcaseCaption}><Badge text={showcaseVisualization.mode === "try_on" ? "Personalized try-on" : "AI flat lay"} /><Text style={styles.showcaseHint}>Generated outfit visualization</Text></View></View><View style={styles.itemsSection}><Text style={styles.itemsSectionTitle}>Items in this look</Text><OutfitItems outfit={outfit} roles={roles} /></View></> : <OutfitItems outfit={outfit} roles={roles} />}
+      {showcaseUrl ? <><View style={styles.showcase}><AuthenticatedImage resizeMode="contain" url={showcaseUrl} style={styles.showcaseImage} />{showcaseVisualization ? <View style={styles.showcaseCaption}><Badge text={showcaseVisualization.mode === "try_on" ? "Personalized try-on" : "AI flat lay"} /><Text style={styles.showcaseHint}>Generated outfit visualization</Text></View> : null}</View><View style={styles.itemsSection}><Text style={styles.itemsSectionTitle}>Items in this look</Text><OutfitItems outfit={outfit} roles={roles} /></View></> : <OutfitItems outfit={outfit} roles={roles} />}
     </View>
     <View style={[styles.panel, !usesWideDetailLayout && styles.stackedPanel]}>
       <View style={styles.badges}><Badge text={humanize(outfit.status)} />{outfit.recommendation_score != null ? <Badge text={`${Math.round(outfit.recommendation_score)}% match`} /> : null}</View>
@@ -163,7 +164,7 @@ export function OutfitDetail({ initialOutfit, roles, onChange }: { initialOutfit
 }
 
 function Section({ children, title }: { children: React.ReactNode; title: string }) { return <View style={styles.section}><Text style={styles.sectionTitle}>{title}</Text>{children}</View>; }
-function OutfitItems({ outfit, roles }: { outfit: Outfit; roles: MetadataOption[] }) { return <View style={styles.gallery}>{[...outfit.items].sort((a, b) => a.position - b.position).map((item) => { const url = resolveImageUrl(item.clothing_item.image?.url); return <View key={item.id} style={styles.item}>{url ? <AuthenticatedImage resizeMode="cover" url={item.clothing_item.image?.url} style={styles.image} /> : <View style={styles.placeholder}><Text style={styles.placeholderText}>W</Text></View>}<View style={styles.itemCopy}><Text style={styles.role}>{labelFor(roles, item.role)}</Text><Text numberOfLines={1} style={styles.itemName}>{item.clothing_item.name || item.clothing_item.subcategory || "Clothing item"}</Text></View></View>; })}</View>; }
+function OutfitItems({ outfit, roles }: { outfit: Outfit; roles: MetadataOption[] }) { return <View style={styles.gallery}>{[...outfit.items].sort((a, b) => a.position - b.position).map((item) => { const url = resolveImageUrl(item.clothing_item.cover_image?.url); return <View key={item.id} style={styles.item}>{url ? <AuthenticatedImage resizeMode="cover" url={item.clothing_item.cover_image?.url} style={styles.image} /> : <View style={styles.placeholder}><Text style={styles.placeholderText}>W</Text></View>}<View style={styles.itemCopy}><Text style={styles.role}>{labelFor(roles, item.role)}</Text><Text numberOfLines={1} style={styles.itemName}>{item.clothing_item.name || item.clothing_item.subcategory || "Clothing item"}</Text></View></View>; })}</View>; }
 function Field({ label, ...props }: { label: string; value: string; placeholder: string; onChangeText: (value: string) => void }) { return <View style={styles.field}><Text style={styles.label}>{label}</Text><TextInput {...props} placeholderTextColor={colors.textSoft} style={styles.input} /></View>; }
 function StatusAction({ active, icon, label, onPress }: { active: boolean; icon: React.ReactNode; label: string; onPress: () => void }) { return <Pressable onPress={onPress} style={[styles.action, active && styles.actionActive]}>{icon}<Text style={[styles.actionText, active && styles.actionTextActive]}>{label}</Text></Pressable>; }
 function Badge({ text }: { text: string }) { return <View style={styles.badge}><Text style={styles.badgeText}>{text}</Text></View>; }

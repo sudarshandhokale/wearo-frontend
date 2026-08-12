@@ -54,6 +54,12 @@ export function WardrobeScreen({ initialItemRequest, onNavigate }: { initialItem
   useEffect(() => { void load(); }, [load]);
 
   useEffect(() => {
+    if (mode !== "list" || !items.some(isItemProcessing)) return;
+    const timeout = setTimeout(() => void load(page), 4000);
+    return () => clearTimeout(timeout);
+  }, [items, load, mode, page]);
+
+  useEffect(() => {
     if (!initialItemRequest) return;
     let cancelled = false;
     void AppService.clothingItem(initialItemRequest.clothingItemId).then((response) => {
@@ -63,7 +69,7 @@ export function WardrobeScreen({ initialItemRequest, onNavigate }: { initialItem
   }, [initialItemRequest?.id]);
 
   useEffect(() => {
-    if (mode !== "detail" || !selected || selected.status !== "processing") return;
+    if (mode !== "detail" || !selected || !isItemProcessing(selected)) return;
 
     let cancelled = false;
     let attempts = 0;
@@ -75,7 +81,7 @@ export function WardrobeScreen({ initialItemRequest, onNavigate }: { initialItem
         if (cancelled) return;
         setSelected(response.data);
         setItems((current) => current.map((item) => item.id === response.data.id ? response.data : item));
-        if (response.data.status === "processing") timeout = setTimeout(poll, 4000);
+        if (isItemProcessing(response.data)) timeout = setTimeout(poll, 4000);
       } catch (caughtError) {
         if (!cancelled) {
           setError(messageFor(caughtError));
@@ -85,7 +91,7 @@ export function WardrobeScreen({ initialItemRequest, onNavigate }: { initialItem
     };
     let timeout = setTimeout(poll, 4000);
     return () => { cancelled = true; clearTimeout(timeout); };
-  }, [mode, selected?.id, selected?.status]);
+  }, [mode, selected?.id, selected?.status, selected?.image_polish?.status]);
 
   const categories = metadata?.clothing_items.categories || [];
   const statusOptions = metadata?.clothing_items.statuses || [];
@@ -154,6 +160,14 @@ export function WardrobeScreen({ initialItemRequest, onNavigate }: { initialItem
     finally { setIsSubmitting(false); }
   }
 
+  async function polish() {
+    if (!selected) return;
+    setIsSubmitting(true); setError(null);
+    try { const response = await AppService.polishClothingItem(selected.id); setSelected(response.data); setItems((current) => current.map((item) => item.id === response.data.id ? response.data : item)); }
+    catch (caughtError) { setError(messageFor(caughtError)); }
+    finally { setIsSubmitting(false); }
+  }
+
   if (mode === "form") {
     if (!selected) {
       return <QuickAdd error={error} isSubmitting={isSubmitting} onBack={() => setMode("list")} onCamera={() => void addImages("camera")} onGallery={() => void addImages("gallery")} />;
@@ -162,7 +176,7 @@ export function WardrobeScreen({ initialItemRequest, onNavigate }: { initialItem
   }
 
   if (mode === "detail" && selected) {
-    return <ItemDetail confirmDelete={confirmDelete} error={error} isSubmitting={isSubmitting} item={selected} metadata={metadata} onBack={() => { setConfirmDelete(false); setMode("list"); }} onDelete={() => setConfirmDelete(true)} onDeleteCancel={() => setConfirmDelete(false)} onDeleteConfirm={remove} onEdit={() => startEdit(selected)} onReanalyze={reanalyze} />;
+    return <ItemDetail confirmDelete={confirmDelete} error={error} isSubmitting={isSubmitting} item={selected} metadata={metadata} onBack={() => { setConfirmDelete(false); setMode("list"); }} onDelete={() => setConfirmDelete(true)} onDeleteCancel={() => setConfirmDelete(false)} onDeleteConfirm={remove} onEdit={() => startEdit(selected)} onPolish={polish} onReanalyze={reanalyze} />;
   }
 
   return (
@@ -234,27 +248,27 @@ function ItemForm(props: { title: string; form: ClothingItemInput; image: Picked
   </ScreenContainer>;
 }
 
-function ItemDetail(props: { item: ClothingItem; metadata: ReturnType<typeof useAppData>["metadata"]; error: string | null; isSubmitting: boolean; confirmDelete: boolean; onBack: () => void; onEdit: () => void; onDelete: () => void; onDeleteCancel: () => void; onDeleteConfirm: () => void; onReanalyze: () => void }) {
-  const url = resolveImageUrl(props.item.image?.url);
+function ItemDetail(props: { item: ClothingItem; metadata: ReturnType<typeof useAppData>["metadata"]; error: string | null; isSubmitting: boolean; confirmDelete: boolean; onBack: () => void; onEdit: () => void; onDelete: () => void; onDeleteCancel: () => void; onDeleteConfirm: () => void; onPolish: () => void; onReanalyze: () => void }) {
+  const url = resolveImageUrl(props.item.display_image?.url);
   return <ScreenContainer>
     <View style={styles.subHeader}><BackButton onPress={props.onBack} /><View style={styles.headerCopy}><Text style={styles.title}>{props.item.name || "Untitled item"}</Text><StatusBadge status={props.item.status} statuses={props.metadata?.clothing_items.statuses || []} /></View></View>
     <View style={styles.detailLayout}>
-      <View style={styles.detailImageFrame}>{url ? <AuthenticatedImage url={props.item.image?.url} style={styles.detailImage} /> : <View style={styles.imagePlaceholder}><Text style={styles.imagePlaceholderText}>No image</Text></View>}</View>
+      <View style={styles.detailImageFrame}>{url ? <AuthenticatedImage url={props.item.display_image?.url} style={styles.detailImage} /> : <View style={styles.imagePlaceholder}><Text style={styles.imagePlaceholderText}>No image</Text></View>}</View>
       <View style={styles.detailCard}>
         <Text style={styles.detailSectionTitle}>Item details</Text>
         <View style={styles.detailGrid}><Detail label="Garment type" value={props.item.garment_type} /><Detail label="Category" value={labelFor(props.metadata?.clothing_items.categories || [], props.item.category)} /><Detail label="Subcategory" value={subcategoryLabel(props.metadata?.clothing_items.categories || [], props.item.subcategory)} /><Detail label="Color" value={props.item.primary_color} /><Detail label="Pattern" value={props.item.pattern} /><Detail label="Material" value={props.item.material} /><Detail label="Fit" value={labelFor(props.metadata?.clothing_items.fits || [], props.item.fit)} /><Detail label="Formality" value={props.item.formality_score ? `${props.item.formality_score}/10` : null} /><Detail label="Cultural tags" value={props.item.cultural_tags.map(humanize).join(", ")} /></View>
-        {props.item.status === "processing" ? <Notice loading title={copy.clothing.processingTitle} text={copy.clothing.processingText} /> : null}
+        {isItemProcessing(props.item) ? <Notice loading title={copy.clothing.processingTitle} text={props.item.status === "uploaded" || props.item.status === "processing" ? copy.clothing.processingText : "WEARO is preparing a cleaner wardrobe image. You can leave this screen while it finishes."} /> : null}
         {props.item.status === "analysis_failed" ? <Notice title={copy.clothing.failedTitle} text={copy.clothing.failedText} tone="error" /> : null}
         {props.error ? <ErrorBanner message={props.error} /> : null}
-        {props.confirmDelete ? <View style={styles.confirmBox}><Text style={styles.confirmTitle}>Remove this item?</Text><Text style={styles.confirmText}>It will be removed from your active wardrobe.</Text><View style={styles.imageActions}><Button onPress={props.onDeleteCancel} style={styles.flexButton} title="Cancel" variant="secondary" /><Button loading={props.isSubmitting} onPress={props.onDeleteConfirm} style={styles.flexButton} title="Remove" /></View></View> : <View style={styles.detailActions}><Button onPress={props.onEdit} style={styles.flexButton} title={copy.clothing.edit} />{props.item.status !== "processing" ? <Button loading={props.isSubmitting} onPress={props.onReanalyze} style={styles.flexButton} title={copy.clothing.reanalyze} variant="secondary" /> : null}<Pressable onPress={props.onDelete}><Text style={styles.deleteText}>Remove item</Text></Pressable></View>}
+        {props.confirmDelete ? <View style={styles.confirmBox}><Text style={styles.confirmTitle}>Remove this item?</Text><Text style={styles.confirmText}>It will be removed from your active wardrobe.</Text><View style={styles.imageActions}><Button onPress={props.onDeleteCancel} style={styles.flexButton} title="Cancel" variant="secondary" /><Button loading={props.isSubmitting} onPress={props.onDeleteConfirm} style={styles.flexButton} title="Remove" /></View></View> : <View style={styles.detailActions}><Button onPress={props.onEdit} style={styles.flexButton} title={copy.clothing.edit} />{!isItemProcessing(props.item) ? <View style={styles.imageActions}><Button loading={props.isSubmitting} onPress={props.onReanalyze} style={styles.flexButton} title={copy.clothing.reanalyze} variant="secondary" /><Button loading={props.isSubmitting} onPress={props.onPolish} style={styles.flexButton} title="Polish image" variant="secondary" /></View> : null}<Pressable onPress={props.onDelete}><Text style={styles.deleteText}>Remove item</Text></Pressable></View>}
       </View>
     </View>
   </ScreenContainer>;
 }
 
 function ItemCard({ item, columns, statuses, onPress }: { item: ClothingItem; columns: number; statuses: MetadataOption[]; onPress: () => void }) {
-  const url = resolveImageUrl(item.image?.url);
-  return <Pressable onPress={onPress} style={[styles.itemCard, { width: columns <= 2 ? "47%" : `${Math.floor(100 / columns) - 2}%` }]}>{url ? <AuthenticatedImage url={item.image?.url} style={styles.itemImage} /> : <View style={styles.itemImagePlaceholder}><Text style={styles.itemImagePlaceholderText}>W</Text></View>}<View style={styles.itemCopy}><StatusBadge compact status={item.status} statuses={statuses} /><Text numberOfLines={1} style={styles.itemName}>{item.name || item.garment_type || item.subcategory || "Clothing item"}</Text><Text numberOfLines={1} style={styles.itemMeta}>{[item.garment_type, item.primary_color, item.category].filter(Boolean).join(" · ") || "Details pending"}</Text></View></Pressable>;
+  const url = resolveImageUrl(item.cover_image?.url);
+  return <Pressable onPress={onPress} style={[styles.itemCard, { width: columns <= 2 ? "47%" : `${Math.floor(100 / columns) - 2}%` }]}>{url ? <AuthenticatedImage url={item.cover_image?.url} style={styles.itemImage} /> : <View style={styles.itemImagePlaceholder}><Text style={styles.itemImagePlaceholderText}>W</Text></View>}<View style={styles.itemCopy}><StatusBadge compact status={item.status} statuses={statuses} /><Text numberOfLines={1} style={styles.itemName}>{item.name || item.garment_type || item.subcategory || "Clothing item"}</Text><Text numberOfLines={1} style={styles.itemMeta}>{[item.garment_type, item.primary_color, item.category].filter(Boolean).join(" · ") || "Details pending"}</Text></View></Pressable>;
 }
 
 function EmptyWardrobe({ onAdd }: { onAdd: () => void }) { return <View style={styles.emptyState}><View style={styles.emptyMark}><Text style={styles.emptyMarkText}>W</Text></View><Text style={styles.emptyTitle}>Build your wardrobe</Text><Text style={styles.emptyText}>Add a few pieces and WEARO will have the ingredients for your first outfit.</Text><Button onPress={onAdd} style={styles.emptyButton} title="Add your first item" /></View>; }
@@ -276,6 +290,7 @@ function toggle(values: string[], value: string) { return values.includes(value)
 function labelFor(options: MetadataOption[], key?: string | null) { return options.find((option) => option.key === key)?.label || key || ""; }
 function subcategoryLabel(categories: Array<MetadataOption & { subcategories: MetadataOption[] }>, key?: string | null) { return categories.flatMap((category) => category.subcategories).find((option) => option.key === key)?.label || key || ""; }
 function messageFor(error: unknown) { return error instanceof Error ? error.message : "Something went wrong. Please try again."; }
+function isItemProcessing(item: ClothingItem) { return ["uploaded", "processing"].includes(item.status) || ["queued", "processing"].includes(item.image_polish?.status); }
 
 const styles = StyleSheet.create({
   headerRow: { alignItems: "center", flexDirection: "row", gap: spacing.md, justifyContent: "space-between", marginBottom: spacing.xl }, headerCopy: { flex: 1, gap: spacing.xs }, title: { ...typography.display, color: colors.text }, subtitle: { ...typography.body, color: colors.textMuted }, addButton: { minWidth: 130 },

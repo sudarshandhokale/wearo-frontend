@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
+import { AppService } from "../api/AppService";
+import type { Outfit, WearHistory } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { useAppData } from "../context/AppDataContext";
+import { AuthenticatedImage } from "../components/AuthenticatedImage";
 import { ScreenContainer } from "../components/ScreenContainer";
 import { useResponsive } from "../hooks/useResponsive";
 import type { Navigate } from "../navigation/types";
@@ -13,15 +16,24 @@ type HomeScreenProps = {
   onNavigate: Navigate;
 };
 
+type RecentWear = WearHistory & { outfit: Outfit };
+
 export function HomeScreen({ onNavigate }: HomeScreenProps) {
   const { user } = useAuth();
   const { saveStyleProfile, styleProfile } = useAppData();
   const { usesSidebar } = useResponsive();
   const [prompts, setPrompts] = useState<SuggestedPrompt[]>([]);
+  const [recentWears, setRecentWears] = useState<RecentWear[]>([]);
   const [prompt, setPrompt] = useState("");
 
   useEffect(() => {
     AIStylistService.suggestedPrompts().then(setPrompts);
+    let cancelled = false;
+    void AppService.wearHistory(1, 3).then(async (response) => {
+      const resolved = await Promise.allSettled(response.data.map(async (wear) => ({ ...wear, outfit: (await AppService.outfit(wear.outfit_id)).data })));
+      if (!cancelled) setRecentWears(resolved.flatMap((result) => result.status === "fulfilled" ? [result.value] : []));
+    }).catch(() => undefined);
+    return () => { cancelled = true; };
   }, []);
 
   const firstName = user?.first_name || "there";
@@ -136,21 +148,19 @@ export function HomeScreen({ onNavigate }: HomeScreenProps) {
             </View>
           </View>
 
-          <View style={styles.panel}>
-            <Text style={styles.panelTitle}>Recent looks</Text>
+          {recentWears.length ? <View style={styles.panel}>
+            <Text style={styles.panelTitle}>Recently worn</Text>
             <View style={styles.recentLookRow}>
-              {["15 Aug", "13 Aug", "11 Aug"].map((date) => (
-                <View key={date} style={styles.recentLook}>
-                  <View style={styles.recentSwatches}>
-                    <View style={[styles.miniSwatch, { backgroundColor: "#7A5330" }]} />
-                    <View style={[styles.miniSwatch, { backgroundColor: "#222222" }]} />
-                    <View style={[styles.miniSwatch, { backgroundColor: "#F7F7F7" }]} />
-                  </View>
-                  <Text style={styles.recentDate}>{date}</Text>
-                </View>
+              {recentWears.map((wear) => (
+                <Pressable accessibilityRole="button" key={wear.id} onPress={() => onNavigate("history")} style={({ pressed }) => [styles.recentLook, pressed && styles.pressed]}>
+                  {wear.outfit.cover_image?.url ? <AuthenticatedImage resizeMode="cover" url={wear.outfit.cover_image.url} style={styles.recentImage} /> : <View style={styles.recentPlaceholder}><Text style={styles.recentPlaceholderText}>W</Text></View>}
+                  <Text numberOfLines={2} style={styles.recentName}>{wear.outfit.name}</Text>
+                  <Text style={styles.recentDate}>{formatWornDate(wear.worn_on)}</Text>
+                  {wear.occasion ? <Text numberOfLines={1} style={styles.recentOccasion}>{humanize(wear.occasion)}</Text> : null}
+                </Pressable>
               ))}
             </View>
-          </View>
+          </View> : null}
         </View>
       </View>
     </ScreenContainer>
@@ -184,6 +194,9 @@ function QuickAction({
     </Pressable>
   );
 }
+
+function formatWornDate(value: string) { const date = new Date(`${value}T12:00:00`); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short" }).format(date); }
+function humanize(value: string) { return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()); }
 
 const styles = StyleSheet.create({
   layout: {
@@ -377,24 +390,41 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     borderRadius: radius.md,
     flex: 1,
-    gap: spacing.xs,
-    padding: spacing.xs
+    gap: spacing.xxs,
+    minWidth: 0,
+    overflow: "hidden",
+    paddingBottom: spacing.sm
   },
-  recentSwatches: {
-    flexDirection: "row",
-    gap: 3
+  recentImage: {
+    aspectRatio: 1,
+    width: "100%"
   },
-  miniSwatch: {
-    borderColor: colors.border,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    flex: 1,
-    height: 34
+  recentPlaceholder: {
+    alignItems: "center",
+    aspectRatio: 1,
+    backgroundColor: "#EFECFF",
+    justifyContent: "center",
+    width: "100%"
+  },
+  recentPlaceholderText: {
+    color: colors.primary,
+    fontSize: 24,
+    fontWeight: "800"
+  },
+  recentName: {
+    ...typography.caption,
+    color: colors.text,
+    paddingHorizontal: spacing.xs
   },
   recentDate: {
     ...typography.caption,
     color: colors.textMuted,
-    textAlign: "center"
+    paddingHorizontal: spacing.xs
+  },
+  recentOccasion: {
+    ...typography.caption,
+    color: colors.primary,
+    paddingHorizontal: spacing.xs
   },
   pressed: {
     opacity: 0.75

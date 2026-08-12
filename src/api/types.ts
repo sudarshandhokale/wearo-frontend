@@ -36,6 +36,14 @@ export type UserConsents = {
 
 export type ApiImage = { signed_id: string; url: string };
 
+export type CoverImage = ApiImage & {
+  kind: "outfit_try_on" | "outfit_flat_lay" | "polished_item" | "original_item";
+  generated: boolean;
+  personalized: boolean;
+  visualization_id?: number | string;
+  clothing_item_id?: number | string;
+};
+
 export type AuthResponseData = {
   user: ApiUser;
 };
@@ -151,7 +159,11 @@ export type ClothingItem = {
   formality_score: number | null;
   status: ClothingItemStatus;
   ai_analyzed_at: string | null;
-  image: { signed_id: string; url: string } | null;
+  image: ApiImage | null;
+  polished_image: ApiImage | null;
+  display_image: ApiImage | null;
+  cover_image: CoverImage | null;
+  image_polish: { status: string };
   created_at: string;
   updated_at: string;
 };
@@ -182,7 +194,7 @@ export type ClothingItemListMeta = {
 
 export type OutfitClothingItem = Pick<
   ClothingItem,
-  "id" | "name" | "category" | "subcategory" | "primary_color" | "image"
+  "id" | "name" | "category" | "subcategory" | "primary_color" | "image" | "display_image" | "cover_image"
 >;
 
 export type OutfitItem = {
@@ -209,6 +221,7 @@ export type Outfit = {
   feedback_note: string | null;
   status_updated_at: string | null;
   recommended_for: string | null;
+  cover_image: CoverImage | null;
   items: OutfitItem[];
   created_at: string;
   updated_at: string;
@@ -244,6 +257,7 @@ export type ExternalContext = { city: string | null; country_code: string | null
 
 export type StylingPlanType = "week" | "vacation";
 export type StylingPlanInput = { plan_type: StylingPlanType; city: string; start_date: string; end_date: string; prompt: string };
+export type ConversationalStylingPlanInput = { prompt: string; plan_type?: StylingPlanType; city?: string; start_date?: string; end_date?: string };
 export type StylingPlanEntry = { id: number | string; planned_for: string; context: Record<string, unknown>; weather_context: Record<string, unknown>; events_context: Record<string, unknown>; outfit: Outfit };
 export type PackingItem = { clothing_item_id?: number | string; name?: string; wear_count: number; [key: string]: unknown };
 export type StylingPlan = { id: number | string; plan_type: StylingPlanType; status: "processing" | "completed" | "failed"; city: string | null; country_code: string | null; start_date: string; end_date: string; prompt: string | null; weather_context: Record<string, unknown>; packing_summary: { days?: number; unique_item_count?: number; items?: PackingItem[]; gaps?: unknown[]; [key: string]: unknown }; failure_code: string | null; completed_at: string | null; entries: StylingPlanEntry[]; created_at: string; updated_at: string };

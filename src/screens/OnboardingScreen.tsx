@@ -436,7 +436,7 @@ function WardrobeStep({ items, isUploading, onCamera, onGallery, onComplete, onL
 }
 
 function UploadedItemGrid({ items, statuses }: { items: ClothingItem[]; statuses: MetadataOption[] }) {
-  return <View style={styles.uploadedGrid}>{items.map((item) => { const url = resolveImageUrl(item.image?.url); return <View key={item.id} style={styles.uploadedItem}>{url ? <AuthenticatedImage resizeMode="cover" url={item.image?.url} style={styles.uploadedImage} /> : <View style={styles.uploadedPlaceholder}><Text style={styles.uploadedPlaceholderText}>W</Text></View>}<View style={styles.uploadedCopy}><Text numberOfLines={1} style={styles.uploadedName}>{item.name || item.subcategory || "Analyzing item"}</Text><Text style={styles.uploadedStatus}>{statuses.find((status) => status.key === item.status)?.label || item.status.replaceAll("_", " ")}</Text></View></View>; })}</View>;
+  return <View style={styles.uploadedGrid}>{items.map((item) => { const url = resolveImageUrl(item.cover_image?.url); return <View key={item.id} style={styles.uploadedItem}>{url ? <AuthenticatedImage resizeMode="cover" url={item.cover_image?.url} style={styles.uploadedImage} /> : <View style={styles.uploadedPlaceholder}><Text style={styles.uploadedPlaceholderText}>W</Text></View>}<View style={styles.uploadedCopy}><Text numberOfLines={1} style={styles.uploadedName}>{item.name || item.subcategory || "Analyzing item"}</Text><Text style={styles.uploadedStatus}>{statuses.find((status) => status.key === item.status)?.label || item.status.replaceAll("_", " ")}</Text></View></View>; })}</View>;
 }
 
 function UploadAction({ title, description, onPress }: { title: string; description: string; onPress: () => void }) {

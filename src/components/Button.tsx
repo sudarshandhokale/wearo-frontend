@@ -7,7 +7,7 @@ type ButtonProps = {
   onPress: () => void;
   disabled?: boolean;
   loading?: boolean;
-  variant?: "primary" | "secondary";
+  variant?: "primary" | "secondary" | "danger";
   style?: ViewStyle;
 };
 
@@ -28,14 +28,15 @@ export function Button({
       onPress={onPress}
       style={({ pressed }) => [
         styles.base,
-        variant === "primary" ? styles.primary : styles.secondary,
+        variant === "primary" ? styles.primary : variant === "danger" ? styles.danger : styles.secondary,
         isDisabled && styles.disabled,
+        isDisabled && variant === "danger" && styles.dangerDisabled,
         pressed && !isDisabled && styles.pressed,
         style
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={variant === "primary" ? "#FFFFFF" : "#20201E"} />
+        <ActivityIndicator color={variant === "secondary" ? "#20201E" : "#FFFFFF"} />
       ) : (
         <Text style={[styles.text, variant === "secondary" && styles.secondaryText]}>{title}</Text>
       )}
@@ -53,6 +54,13 @@ const styles = StyleSheet.create({
   },
   primary: {
     backgroundColor: colors.primary
+  },
+  danger: {
+    backgroundColor: colors.error
+  },
+  dangerDisabled: {
+    backgroundColor: "#D8D4DC",
+    opacity: 1
   },
   secondary: {
     backgroundColor: colors.surface,
