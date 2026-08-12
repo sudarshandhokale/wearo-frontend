@@ -1,25 +1,30 @@
-export type AppScreen = "home" | "wardrobe" | "ask" | "outfits" | "history" | "profile" | "settings";
+export type AppScreen = "home" | "wardrobe" | "ask" | "outfits" | "history" | "profile";
+
+export type NavigationOptions = {
+  prompt?: string;
+  autoSend?: boolean;
+};
+
+export type Navigate = (screen: AppScreen, options?: NavigationOptions) => void;
 
 export type NavItem = {
   key: AppScreen;
   label: string;
-  symbol: string;
 };
 
 export const mobileNavItems: NavItem[] = [
-  { key: "home", label: "Home", symbol: "⌂" },
-  { key: "wardrobe", label: "Wardrobe", symbol: "▦" },
-  { key: "ask", label: "WEARO", symbol: "✦" },
-  { key: "history", label: "History", symbol: "◷" },
-  { key: "profile", label: "Profile", symbol: "○" }
+  { key: "home", label: "Home" },
+  { key: "wardrobe", label: "Wardrobe" },
+  { key: "ask", label: "Ask" },
+  { key: "history", label: "History" },
+  { key: "profile", label: "Profile" }
 ];
 
 export const desktopNavItems: NavItem[] = [
-  { key: "home", label: "Home", symbol: "⌂" },
-  { key: "wardrobe", label: "Wardrobe", symbol: "▦" },
-  { key: "ask", label: "Ask WEARO", symbol: "✦" },
-  { key: "outfits", label: "Outfits", symbol: "◇" },
-  { key: "history", label: "History", symbol: "◷" },
-  { key: "profile", label: "Profile", symbol: "○" },
-  { key: "settings", label: "Settings", symbol: "⚙" }
+  { key: "home", label: "Home" },
+  { key: "wardrobe", label: "Wardrobe" },
+  { key: "ask", label: "Ask WEARO" },
+  { key: "outfits", label: "Outfits" },
+  { key: "history", label: "History" },
+  { key: "profile", label: "Profile" }
 ];

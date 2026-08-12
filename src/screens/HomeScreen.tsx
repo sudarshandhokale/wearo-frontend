@@ -5,12 +5,12 @@ import { useAuth } from "../auth/AuthContext";
 import { useAppData } from "../context/AppDataContext";
 import { ScreenContainer } from "../components/ScreenContainer";
 import { useResponsive } from "../hooks/useResponsive";
-import type { AppScreen } from "../navigation/types";
+import type { Navigate } from "../navigation/types";
 import { AIStylistService, SuggestedPrompt } from "../services/AIStylistService";
 import { colors, radius, shadows, spacing, typography } from "../theme";
 
 type HomeScreenProps = {
-  onNavigate: (screen: AppScreen) => void;
+  onNavigate: Navigate;
 };
 
 export function HomeScreen({ onNavigate }: HomeScreenProps) {
@@ -18,6 +18,7 @@ export function HomeScreen({ onNavigate }: HomeScreenProps) {
   const { saveStyleProfile, styleProfile } = useAppData();
   const { usesSidebar } = useResponsive();
   const [prompts, setPrompts] = useState<SuggestedPrompt[]>([]);
+  const [prompt, setPrompt] = useState("");
 
   useEffect(() => {
     AIStylistService.suggestedPrompts().then(setPrompts);
@@ -42,6 +43,11 @@ export function HomeScreen({ onNavigate }: HomeScreenProps) {
     });
   }
 
+  function askWearo(message?: string) {
+    const context = message?.trim();
+    onNavigate("ask", context ? { prompt: context, autoSend: true } : undefined);
+  }
+
   return (
     <ScreenContainer>
       <View style={[styles.layout, usesSidebar && styles.desktopLayout]}>
@@ -61,14 +67,17 @@ export function HomeScreen({ onNavigate }: HomeScreenProps) {
             <View style={styles.promptBar}>
               <TextInput
                 accessibilityLabel="Ask WEARO what to wear"
-                onFocus={() => onNavigate("ask")}
+                onChangeText={setPrompt}
+                onSubmitEditing={() => askWearo(prompt || "What should I wear today?")}
                 placeholder="What should I wear today?"
                 placeholderTextColor={colors.textSoft}
+                returnKeyType="send"
                 style={styles.promptInput}
+                value={prompt}
               />
               <Pressable
                 accessibilityRole="button"
-                onPress={() => onNavigate("ask")}
+                onPress={() => askWearo(prompt || "What should I wear today?")}
                 style={styles.promptButton}
               >
                 <Text style={styles.promptButtonText}>✦</Text>
@@ -118,7 +127,7 @@ export function HomeScreen({ onNavigate }: HomeScreenProps) {
                 <Pressable
                   accessibilityRole="button"
                   key={prompt.id}
-                  onPress={() => onNavigate("ask")}
+                  onPress={() => askWearo(prompt.text)}
                   style={({ pressed }) => [styles.suggestedPrompt, pressed && styles.pressed]}
                 >
                   <Text style={styles.suggestedPromptText}>{prompt.text}</Text>

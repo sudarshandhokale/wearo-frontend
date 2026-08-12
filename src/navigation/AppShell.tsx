@@ -1,30 +1,37 @@
 import { ReactNode, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Clock3, Home, Shirt, Sparkles, UserRound, WandSparkles } from "lucide-react-native";
 
 import { useResponsive } from "../hooks/useResponsive";
 import { colors, radius, shadows, spacing, typography } from "../theme";
-import { WearoMark, WearoResponsiveLogo, WearoWebLogo } from "../components/WearoLogo";
+import { WearoResponsiveLogo, WearoWebLogo } from "../components/WearoLogo";
 import { AskWearoScreen } from "../screens/AskWearoScreen";
 import { HistoryScreen } from "../screens/HistoryScreen";
 import { HomeScreen } from "../screens/HomeScreen";
 import { OutfitsScreen } from "../screens/OutfitsScreen";
 import { ProfileScreen } from "../screens/ProfileScreen";
-import { SettingsScreen } from "../screens/SettingsScreen";
 import { WardrobeScreen } from "../screens/WardrobeScreen";
-import type { AppScreen, NavItem } from "./types";
+import type { AppScreen, Navigate, NavigationOptions, NavItem } from "./types";
 import { desktopNavItems, mobileNavItems } from "./types";
 
 export function AppShell() {
   const [activeScreen, setActiveScreen] = useState<AppScreen>("home");
+  const [askRequest, setAskRequest] = useState<{ id: number; prompt: string; autoSend: boolean } | null>(null);
   const { usesSidebar } = useResponsive();
 
-  const screen = useMemo(() => renderScreen(activeScreen, setActiveScreen), [activeScreen]);
+  const navigate: Navigate = (screen, options) => {
+    if (screen === "ask") {
+      setAskRequest(options?.prompt ? { id: Date.now(), prompt: options.prompt, autoSend: options.autoSend === true } : null);
+    }
+    setActiveScreen(screen);
+  };
+  const screen = useMemo(() => renderScreen(activeScreen, navigate, askRequest), [activeScreen, askRequest]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.shell}>
-        {usesSidebar ? <Sidebar activeScreen={activeScreen} onSelect={setActiveScreen} /> : null}
+        {usesSidebar ? <Sidebar activeScreen={activeScreen} onSelect={navigate} /> : null}
         <View style={styles.content}>
           {!usesSidebar ? (
             <View style={styles.mobileHeader}>
@@ -33,29 +40,27 @@ export function AppShell() {
           ) : null}
           {screen}
         </View>
-        {!usesSidebar ? <BottomNav activeScreen={activeScreen} onSelect={setActiveScreen} /> : null}
+        {!usesSidebar ? <BottomNav activeScreen={activeScreen} onSelect={navigate} /> : null}
       </View>
     </SafeAreaView>
   );
 }
 
-function renderScreen(activeScreen: AppScreen, setActiveScreen: (screen: AppScreen) => void): ReactNode {
+function renderScreen(activeScreen: AppScreen, navigate: Navigate, askRequest: { id: number; prompt: string; autoSend: boolean } | null): ReactNode {
   switch (activeScreen) {
     case "wardrobe":
-      return <WardrobeScreen onNavigate={setActiveScreen} />;
+      return <WardrobeScreen onNavigate={navigate} />;
     case "ask":
-      return <AskWearoScreen onNavigate={setActiveScreen} />;
+      return <AskWearoScreen initialRequest={askRequest} onNavigate={navigate} />;
     case "outfits":
-      return <OutfitsScreen onNavigate={setActiveScreen} />;
+      return <OutfitsScreen onNavigate={navigate} />;
     case "history":
-      return <HistoryScreen onNavigate={setActiveScreen} />;
+      return <HistoryScreen onNavigate={navigate} />;
     case "profile":
       return <ProfileScreen />;
-    case "settings":
-      return <SettingsScreen />;
     case "home":
     default:
-      return <HomeScreen onNavigate={setActiveScreen} />;
+      return <HomeScreen onNavigate={navigate} />;
   }
 }
 
@@ -64,7 +69,7 @@ function Sidebar({
   onSelect
 }: {
   activeScreen: AppScreen;
-  onSelect: (screen: AppScreen) => void;
+  onSelect: Navigate;
 }) {
   return (
     <View style={styles.sidebar}>
@@ -89,7 +94,7 @@ function BottomNav({
   onSelect
 }: {
   activeScreen: AppScreen;
-  onSelect: (screen: AppScreen) => void;
+  onSelect: Navigate;
 }) {
   return (
     <View style={styles.bottomNav}>
@@ -117,8 +122,6 @@ function NavButton({
   mode: "sidebar" | "bottom";
   onPress: () => void;
 }) {
-  const isCenterAction = mode === "bottom" && item.key === "ask";
-
   return (
     <Pressable
       accessibilityRole="button"
@@ -130,13 +133,7 @@ function NavButton({
         pressed && styles.pressed
       ]}
     >
-      {isCenterAction ? (
-        <View style={[styles.centerAction, active && styles.centerActionActive]}>
-          <WearoMark light />
-        </View>
-      ) : (
-        <Text style={[styles.navSymbol, active && styles.navSymbolActive]}>{item.symbol}</Text>
-      )}
+      <NavIcon active={active} screen={item.key} />
       <Text
         numberOfLines={1}
         style={[
@@ -148,6 +145,16 @@ function NavButton({
       </Text>
     </Pressable>
   );
+}
+
+function NavIcon({ active, screen }: { active: boolean; screen: AppScreen }) {
+  const props = { color: active ? colors.primary : colors.textSoft, size: 21, strokeWidth: active ? 2.5 : 2 };
+  if (screen === "wardrobe") return <Shirt {...props} />;
+  if (screen === "ask") return <Sparkles {...props} />;
+  if (screen === "outfits") return <WandSparkles {...props} />;
+  if (screen === "history") return <Clock3 {...props} />;
+  if (screen === "profile") return <UserRound {...props} />;
+  return <Home {...props} />;
 }
 
 const styles = StyleSheet.create({
@@ -221,26 +228,6 @@ const styles = StyleSheet.create({
   },
   bottomButtonActive: {
     backgroundColor: "#F5F3FF"
-  },
-  centerAction: {
-    alignItems: "center",
-    backgroundColor: colors.primary,
-    borderRadius: radius.pill,
-    height: 48,
-    justifyContent: "center",
-    marginTop: -24,
-    width: 48
-  },
-  centerActionActive: {
-    backgroundColor: colors.primaryPressed
-  },
-  navSymbol: {
-    color: colors.textSoft,
-    fontSize: 22,
-    fontWeight: "800"
-  },
-  navSymbolActive: {
-    color: colors.primary
   },
   sidebarLabel: {
     ...typography.button,

@@ -2,6 +2,8 @@ import Constants from "expo-constants";
 
 import { ApiError, getFirstApiFieldError, normalizeApiFieldErrors } from "./ApiError";
 import type { SafegoResponse } from "./types";
+import { notifyUnauthorized } from "../auth/sessionEvents";
+import { tokenStorage } from "../auth/tokenStorage";
 
 const configuredBaseUrl =
   process.env.EXPO_PUBLIC_API_BASE_URL ||
@@ -90,6 +92,11 @@ export class RestService {
       (!payload.success && payload.error.message) ||
       getFirstApiFieldError(fieldErrors) ||
       `Request failed (${response.status})`;
+
+    if (response.status === 401) {
+      await tokenStorage.clear();
+      notifyUnauthorized();
+    }
 
     throw new ApiError(
       response.status,

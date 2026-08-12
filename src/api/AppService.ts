@@ -3,7 +3,11 @@ import type {
   ClothingItem,
   ClothingItemInput,
   ClothingItemListMeta,
+  AiUsage,
   Outfit,
+  OutfitFeedbackInput,
+  PaginationMeta,
+  RecommendationRequest,
   RecommendationResponse,
   StyleProfile,
   StyleProfileInput
@@ -146,6 +150,26 @@ export const AppService = {
   },
   async outfit(id: Outfit["id"]) {
     return RestService.GET<Outfit>(`/api/v1/outfits/${id}`, await token());
+  },
+  async outfits(page = 1, perPage = 20) {
+    return RestService.GET<Outfit[]>(`/api/v1/outfits?page=${page}&per_page=${perPage}`, await token()) as Promise<
+      Omit<RestResult<Outfit[]>, "meta"> & { meta: PaginationMeta | null }
+    >;
+  },
+  async updateOutfit(id: Outfit["id"], input: OutfitFeedbackInput) {
+    return RestService.PATCH<Outfit>(`/api/v1/outfits/${id}`, { outfit: input }, await token());
+  },
+  async recommendationRequests(page = 1, perPage = 20) {
+    return RestService.GET<RecommendationRequest[]>(
+      `/api/v1/recommendation_requests?page=${page}&per_page=${perPage}`,
+      await token()
+    ) as Promise<Omit<RestResult<RecommendationRequest[]>, "meta"> & { meta: PaginationMeta | null }>;
+  },
+  async recommendationRequest(id: RecommendationRequest["id"]) {
+    return RestService.GET<RecommendationRequest>(`/api/v1/recommendation_requests/${id}`, await token());
+  },
+  async aiUsage() {
+    return RestService.GET<AiUsage>("/api/v1/ai/usage", await token());
   }
 };
 

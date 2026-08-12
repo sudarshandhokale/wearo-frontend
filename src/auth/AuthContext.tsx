@@ -4,6 +4,7 @@ import { AuthService } from "../api/AuthService";
 import type { ApiUser, AuthResponseData, LoginParams, RegisterParams, UpdateUserParams } from "../api/types";
 import { parseBearerToken } from "./authToken";
 import { tokenStorage } from "./tokenStorage";
+import { onUnauthorized } from "./sessionEvents";
 
 type AuthContextValue = {
   isInitializing: boolean;
@@ -71,6 +72,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => onUnauthorized(() => setUser(null)), []);
 
   const value = useMemo<AuthContextValue>(
     () => ({

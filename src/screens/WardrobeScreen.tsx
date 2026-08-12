@@ -5,6 +5,7 @@ import { AppService, PickedImage, resolveImageUrl } from "../api/AppService";
 import type { ClothingItem, ClothingItemInput, MetadataOption } from "../api/types";
 import { useAppData } from "../context/AppDataContext";
 import { Button } from "../components/Button";
+import { PhotoGuide } from "../components/PhotoGuide";
 import { ScreenContainer } from "../components/ScreenContainer";
 import { useResponsive } from "../hooks/useResponsive";
 import { copy } from "../localization/en";
@@ -13,7 +14,7 @@ import { colors, radius, shadows, spacing, typography } from "../theme";
 import { pickWardrobeImage, pickWardrobeImages } from "../utils/imagePicker";
 
 type ViewMode = "list" | "form" | "detail";
-const initialInput: ClothingItemInput = { name: "", category: "", subcategory: "", primary_color: "", secondary_colors: [], pattern: "", material: "", season_tags: [], occasion_tags: [], style_tags: [], formality_score: "" };
+const initialInput: ClothingItemInput = { name: "", garment_type: "", category: "", subcategory: "", primary_color: "", secondary_colors: [], pattern: "", material: "", season_tags: [], occasion_tags: [], style_tags: [], cultural_tags: [], formality_score: "" };
 
 export function WardrobeScreen({ onNavigate }: { onNavigate: (screen: AppScreen) => void }) {
   void onNavigate;
@@ -181,7 +182,8 @@ function QuickAdd(props: { error: string | null; isSubmitting: boolean; onBack: 
       <View style={styles.quickAddPanel}>
         <View style={styles.quickAddMark}><Text style={styles.quickAddMarkText}>+</Text></View>
         <Text style={styles.quickAddTitle}>Add clothing photos</Text>
-        <Text style={styles.quickAddText}>Use one photo per item, with the full piece visible and good lighting.</Text>
+        <Text style={styles.quickAddText}>One clothing item per photo gives WEARO the clearest result.</Text>
+        <PhotoGuide />
         <View style={styles.quickAddActions}>
           <Button disabled={props.isSubmitting} onPress={props.onCamera} style={styles.quickAddButton} title="Take photo" variant="secondary" />
           <Button disabled={props.isSubmitting} onPress={props.onGallery} style={styles.quickAddButton} title="Choose from gallery" />
@@ -205,6 +207,7 @@ function ItemForm(props: { title: string; form: ClothingItemInput; image: Picked
       </View>
       <View style={styles.formCard}>
         <Field label="Item name" onChange={(value) => update("name", value)} placeholder="Navy textured polo" value={props.form.name} />
+        <Field label="Garment type" onChange={(value) => update("garment_type", value)} placeholder="Huipil, saree, polo shirt…" value={props.form.garment_type} />
         <OptionField label="Category" options={props.categories} selected={props.form.category} onSelect={(value) => props.onChange({ ...props.form, category: value, subcategory: "" })} />
         {props.form.category ? <OptionField label="Subcategory" options={props.selectedCategory?.subcategories || []} selected={props.form.subcategory} onSelect={(value) => update("subcategory", value)} /> : null}
         <View style={styles.twoColumns}><View style={styles.flex}><Field label="Primary color" onChange={(value) => update("primary_color", value)} placeholder="navy" value={props.form.primary_color} /></View><View style={styles.flex}><Field label="Pattern" onChange={(value) => update("pattern", value)} placeholder="solid" value={props.form.pattern} /></View></View>
@@ -212,6 +215,7 @@ function ItemForm(props: { title: string; form: ClothingItemInput; image: Picked
         <MultiOptionField label="Seasons" options={props.seasons} selected={props.form.season_tags} onSelect={(value) => update("season_tags", toggle(props.form.season_tags, value))} />
         <MultiOptionField label="Occasions" options={props.occasions} selected={props.form.occasion_tags} onSelect={(value) => update("occasion_tags", toggle(props.form.occasion_tags, value))} />
         <MultiOptionField label="Style tags" options={props.styles} selected={props.form.style_tags} onSelect={(value) => update("style_tags", toggle(props.form.style_tags, value))} />
+        <TagField label="Cultural tags" onChange={(values) => update("cultural_tags", values)} placeholder="maya traditional, guatemalan" values={props.form.cultural_tags} />
         {props.error ? <ErrorBanner message={props.error} /> : null}
         <Button loading={props.isSubmitting} onPress={props.onSubmit} title="Save item" />
       </View>
@@ -227,7 +231,7 @@ function ItemDetail(props: { item: ClothingItem; metadata: ReturnType<typeof use
       <View style={styles.detailImageFrame}>{url ? <Image source={{ uri: url }} style={styles.detailImage} /> : <View style={styles.imagePlaceholder}><Text style={styles.imagePlaceholderText}>No image</Text></View>}</View>
       <View style={styles.detailCard}>
         <Text style={styles.detailSectionTitle}>Item details</Text>
-        <View style={styles.detailGrid}><Detail label="Category" value={labelFor(props.metadata?.clothing_items.categories || [], props.item.category)} /><Detail label="Type" value={subcategoryLabel(props.metadata?.clothing_items.categories || [], props.item.subcategory)} /><Detail label="Color" value={props.item.primary_color} /><Detail label="Pattern" value={props.item.pattern} /><Detail label="Material" value={props.item.material} /><Detail label="Formality" value={props.item.formality_score ? `${props.item.formality_score}/10` : null} /></View>
+        <View style={styles.detailGrid}><Detail label="Garment type" value={props.item.garment_type} /><Detail label="Category" value={labelFor(props.metadata?.clothing_items.categories || [], props.item.category)} /><Detail label="Subcategory" value={subcategoryLabel(props.metadata?.clothing_items.categories || [], props.item.subcategory)} /><Detail label="Color" value={props.item.primary_color} /><Detail label="Pattern" value={props.item.pattern} /><Detail label="Material" value={props.item.material} /><Detail label="Formality" value={props.item.formality_score ? `${props.item.formality_score}/10` : null} /><Detail label="Cultural tags" value={props.item.cultural_tags.map(humanize).join(", ")} /></View>
         {props.item.status === "processing" ? <Notice loading title={copy.clothing.processingTitle} text={copy.clothing.processingText} /> : null}
         {props.item.status === "analysis_failed" ? <Notice title={copy.clothing.failedTitle} text={copy.clothing.failedText} tone="error" /> : null}
         {props.error ? <ErrorBanner message={props.error} /> : null}
@@ -239,7 +243,7 @@ function ItemDetail(props: { item: ClothingItem; metadata: ReturnType<typeof use
 
 function ItemCard({ item, columns, statuses, onPress }: { item: ClothingItem; columns: number; statuses: MetadataOption[]; onPress: () => void }) {
   const url = resolveImageUrl(item.image?.url);
-  return <Pressable onPress={onPress} style={[styles.itemCard, { width: columns <= 2 ? "47%" : `${Math.floor(100 / columns) - 2}%` }]}>{url ? <Image source={{ uri: url }} style={styles.itemImage} /> : <View style={styles.itemImagePlaceholder}><Text style={styles.itemImagePlaceholderText}>W</Text></View>}<View style={styles.itemCopy}><StatusBadge compact status={item.status} statuses={statuses} /><Text numberOfLines={1} style={styles.itemName}>{item.name || item.subcategory || "Clothing item"}</Text><Text numberOfLines={1} style={styles.itemMeta}>{[item.primary_color, item.category].filter(Boolean).join(" · ") || "Details pending"}</Text></View></Pressable>;
+  return <Pressable onPress={onPress} style={[styles.itemCard, { width: columns <= 2 ? "47%" : `${Math.floor(100 / columns) - 2}%` }]}>{url ? <Image source={{ uri: url }} style={styles.itemImage} /> : <View style={styles.itemImagePlaceholder}><Text style={styles.itemImagePlaceholderText}>W</Text></View>}<View style={styles.itemCopy}><StatusBadge compact status={item.status} statuses={statuses} /><Text numberOfLines={1} style={styles.itemName}>{item.name || item.garment_type || item.subcategory || "Clothing item"}</Text><Text numberOfLines={1} style={styles.itemMeta}>{[item.garment_type, item.primary_color, item.category].filter(Boolean).join(" · ") || "Details pending"}</Text></View></Pressable>;
 }
 
 function EmptyWardrobe({ onAdd }: { onAdd: () => void }) { return <View style={styles.emptyState}><View style={styles.emptyMark}><Text style={styles.emptyMarkText}>W</Text></View><Text style={styles.emptyTitle}>Build your wardrobe</Text><Text style={styles.emptyText}>Add a few pieces and WEARO will have the ingredients for your first outfit.</Text><Button onPress={onAdd} style={styles.emptyButton} title="Add your first item" /></View>; }
@@ -248,13 +252,15 @@ function OptionField({ label, options, selected, onSelect }: { label: string; op
 function MultiOptionField({ label, options, selected, onSelect }: { label: string; options: MetadataOption[]; selected: string[]; onSelect: (value: string) => void }) { return <View style={styles.fieldGroup}><Text style={styles.fieldLabel}>{label}</Text><View style={styles.chips}>{options.map((option) => <Chip key={option.key} label={option.label} selected={selected.includes(option.key)} onPress={() => onSelect(option.key)} />)}</View></View>; }
 function Chip({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) { return <Pressable onPress={onPress} style={[styles.chip, selected && styles.chipSelected]}><Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text></Pressable>; }
 function Field({ label, value, placeholder, onChange, keyboardType = "default" }: { label: string; value: string; placeholder: string; onChange: (value: string) => void; keyboardType?: "default" | "number-pad" }) { return <View style={styles.fieldGroup}><Text style={styles.fieldLabel}>{label}</Text><TextInput keyboardType={keyboardType} onChangeText={onChange} placeholder={placeholder} placeholderTextColor={colors.textSoft} style={styles.input} value={value} /></View>; }
+function TagField({ label, values, placeholder, onChange }: { label: string; values: string[]; placeholder: string; onChange: (values: string[]) => void }) { const [text, setText] = useState(values.map(humanize).join(", ")); return <Field label={label} onChange={(value) => { setText(value); onChange(value.split(",").map((tag) => tag.trim().toLowerCase().replace(/\s+/g, "_")).filter(Boolean)); }} placeholder={placeholder} value={text} />; }
 function BackButton({ onPress }: { onPress: () => void }) { return <Pressable accessibilityLabel="Go back" accessibilityRole="button" onPress={onPress} style={styles.backButton}><Text style={styles.backText}>‹</Text></Pressable>; }
 function StatusBadge({ status, statuses, compact = false }: { status: ClothingItem["status"]; statuses: MetadataOption[]; compact?: boolean }) { const tone = status === "ready" ? colors.success : status === "analysis_failed" ? colors.error : status === "processing" ? colors.warning : colors.info; return <View style={[styles.statusBadge, compact && styles.statusBadgeCompact, { backgroundColor: `${tone}18` }]}><View style={[styles.statusDot, { backgroundColor: tone }]} /><Text style={[styles.statusText, { color: tone }]}>{labelFor(statuses, status) || status.replace("_", " ")}</Text></View>; }
 function Detail({ label, value }: { label: string; value: string | null | undefined }) { return <View style={styles.detail}><Text style={styles.detailLabel}>{label}</Text><Text style={styles.detailValue}>{value || "Not set"}</Text></View>; }
 function Notice({ title, text, tone = "info", loading = false }: { title: string; text: string; tone?: "info" | "error"; loading?: boolean }) { return <View style={[styles.notice, tone === "error" && styles.noticeError]}>{loading ? <ActivityIndicator color={colors.primary} /> : null}<View style={styles.noticeCopy}><Text style={styles.noticeTitle}>{title}</Text><Text style={styles.noticeText}>{text}</Text></View></View>; }
 function ErrorBanner({ message }: { message: string }) { return <View style={styles.errorBanner}><Text style={styles.errorText}>{message}</Text></View>; }
 function Loading({ label }: { label: string }) { return <View style={styles.loading}><ActivityIndicator color={colors.primary} /><Text style={styles.loadingText}>{label}</Text></View>; }
-function inputFromItem(item: ClothingItem): ClothingItemInput { return { name: item.name || "", category: item.category || "", subcategory: item.subcategory || "", primary_color: item.primary_color || "", secondary_colors: item.secondary_colors || [], pattern: item.pattern || "", material: item.material || "", season_tags: item.season_tags || [], occasion_tags: item.occasion_tags || [], style_tags: item.style_tags || [], formality_score: item.formality_score ? String(item.formality_score) : "" }; }
+function inputFromItem(item: ClothingItem): ClothingItemInput { return { name: item.name || "", garment_type: item.garment_type || "", category: item.category || "", subcategory: item.subcategory || "", primary_color: item.primary_color || "", secondary_colors: item.secondary_colors || [], pattern: item.pattern || "", material: item.material || "", season_tags: item.season_tags || [], occasion_tags: item.occasion_tags || [], style_tags: item.style_tags || [], cultural_tags: item.cultural_tags || [], formality_score: item.formality_score ? String(item.formality_score) : "" }; }
+function humanize(value: string) { return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()); }
 function toggle(values: string[], value: string) { return values.includes(value) ? values.filter((item) => item !== value) : [...values, value]; }
 function labelFor(options: MetadataOption[], key?: string | null) { return options.find((option) => option.key === key)?.label || key || ""; }
 function subcategoryLabel(categories: Array<MetadataOption & { subcategories: MetadataOption[] }>, key?: string | null) { return categories.flatMap((category) => category.subcategories).find((option) => option.key === key)?.label || key || ""; }

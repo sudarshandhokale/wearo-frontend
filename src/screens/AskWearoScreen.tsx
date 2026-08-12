@@ -1,44 +1,59 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Send, Sparkles } from "lucide-react-native";
 
 import { ApiError } from "../api/ApiError";
 import { AppService, resolveImageUrl } from "../api/AppService";
-import type { MetadataOption, Outfit, RecommendationErrorDetails } from "../api/types";
+import type { MetadataOption, Outfit, RecommendationErrorDetails, RecommendationRequest } from "../api/types";
 import { Button } from "../components/Button";
+import { OutfitDetail } from "../components/OutfitDetail";
 import { ScreenContainer } from "../components/ScreenContainer";
+import { WearoMark } from "../components/WearoLogo";
 import { useAppData } from "../context/AppDataContext";
 import { useResponsive } from "../hooks/useResponsive";
 import { copy } from "../localization/en";
-import type { AppScreen } from "../navigation/types";
+import type { Navigate } from "../navigation/types";
 import { colors, radius, shadows, spacing, typography } from "../theme";
 
 type StylistView = "prompt" | "results" | "detail";
 
-export function AskWearoScreen({ onNavigate }: { onNavigate: (screen: AppScreen) => void }) {
+export function AskWearoScreen({ initialRequest, onNavigate }: { initialRequest: { id: number; prompt: string; autoSend: boolean } | null; onNavigate: Navigate }) {
   const { metadata } = useAppData();
   const { isMobile } = useResponsive();
   const [view, setView] = useState<StylistView>("prompt");
   const [prompt, setPrompt] = useState("");
   const [outfits, setOutfits] = useState<Outfit[]>([]);
   const [selected, setSelected] = useState<Outfit | null>(null);
+  const [recommendation, setRecommendation] = useState<RecommendationRequest | null>(null);
   const [missingRoles, setMissingRoles] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const consumedRequest = useRef<number | null>(null);
   const roles = metadata?.outfits?.roles || [];
   const statuses = metadata?.outfits?.statuses || [];
 
-  async function submit() {
-    if (!prompt.trim()) {
+  useEffect(() => {
+    if (!initialRequest || consumedRequest.current === initialRequest.id) return;
+    consumedRequest.current = initialRequest.id;
+    setPrompt(initialRequest.prompt);
+    if (initialRequest.autoSend) void submit(initialRequest.prompt);
+  }, [initialRequest]);
+
+  async function submit(message = prompt) {
+    const normalizedPrompt = message.trim();
+    if (!normalizedPrompt) {
       setError("Describe where you are going or what you are dressing for");
       return;
     }
 
+    setPrompt(normalizedPrompt);
     setIsLoading(true);
     setError(null);
     setMissingRoles([]);
     try {
-      const response = await AppService.recommendations(prompt.trim());
+      const response = await AppService.recommendations(normalizedPrompt);
       setOutfits(response.data.outfits);
+      setRecommendation(response.data.recommendation);
       setView("results");
     } catch (caughtError) {
       setError(messageFor(caughtError));
@@ -76,25 +91,8 @@ export function AskWearoScreen({ onNavigate }: { onNavigate: (screen: AppScreen)
           </View>
         </View>
         {error ? <ErrorBanner message={error} /> : null}
-        <View style={[styles.detailLayout, isMobile && styles.mobileStack]}>
-          <OutfitGallery outfit={selected} roles={roles} large />
-          <View style={styles.detailPanel}>
-            <View style={styles.badgeRow}>
-              <Badge label={labelFor(statuses, selected.status)} />
-              {selected.recommendation_score != null ? (
-                <Badge label={`${copy.common.score} ${Math.round(selected.recommendation_score)}%`} />
-              ) : null}
-            </View>
-            {selected.recommended_for ? (
-              <Info label={copy.stylist.recommendedFor} value={formatLocalDate(selected.recommended_for)} />
-            ) : null}
-            <View style={styles.explanation}>
-              <Text style={styles.sectionTitle}>{copy.stylist.explanation}</Text>
-              <Text style={styles.body}>{selected.explanation}</Text>
-            </View>
-            <Button onPress={() => setView("results")} title={copy.stylist.backToResults} variant="secondary" />
-          </View>
-        </View>
+        <OutfitDetail initialOutfit={selected} onChange={(updated) => { setSelected(updated); setOutfits((current) => current.map((item) => item.id === updated.id ? updated : item)); }} roles={roles} />
+        <Button onPress={() => setView("results")} style={styles.tryAgainButton} title={copy.stylist.backToResults} variant="secondary" />
       </ScreenContainer>
     );
   }
@@ -110,42 +108,29 @@ export function AskWearoScreen({ onNavigate }: { onNavigate: (screen: AppScreen)
       </View>
 
       {view === "prompt" ? (
-        <View style={styles.promptLayout}>
-          <View style={styles.promptPanel}>
-            <Text style={styles.fieldLabel}>{copy.stylist.promptLabel}</Text>
-            <TextInput
-              accessibilityLabel={copy.stylist.promptLabel}
-              editable={!isLoading}
-              multiline
-              onChangeText={setPrompt}
-              placeholder={copy.stylist.promptPlaceholder}
-              placeholderTextColor={colors.textSoft}
-              style={styles.promptInput}
-              value={prompt}
-            />
-            {error ? <ErrorBanner message={error} /> : null}
-            {missingRoles.length ? (
-              <View style={styles.incompletePanel}>
-                <Text style={styles.sectionTitle}>{copy.stylist.incompleteTitle}</Text>
-                <View style={styles.missingRoles}>
-                  {missingRoles.map((role) => <Badge key={role} label={labelFor(roles, role)} />)}
-                </View>
-                <Button onPress={() => onNavigate("wardrobe")} title={copy.stylist.addClothing} variant="secondary" />
-              </View>
-            ) : null}
-            <Button disabled={!prompt.trim()} loading={isLoading} onPress={() => void submit()} title={copy.stylist.submit} />
-          </View>
-          {isLoading ? (
-            <View style={styles.loadingPanel}>
-              <ActivityIndicator color={colors.primary} size="large" />
-              <Text style={styles.loadingTitle}>{copy.stylist.loadingTitle}</Text>
-              <Text style={styles.loadingText}>{copy.stylist.loadingText}</Text>
+        <View style={styles.chatShell}>
+          <View style={styles.conversation}>
+            <AssistantMessage>
+              <Text style={styles.assistantTitle}>Hi, I'm WEARO, your personal stylist.</Text>
+              <Text style={styles.messageText}>Tell me what you're dressing for, where you're going, or the kind of look you want. I'll build outfits from your wardrobe.</Text>
+            </AssistantMessage>
+            <View style={styles.suggestions}>
+              {suggestedPrompts.map((suggestion) => <Pressable disabled={isLoading} key={suggestion} onPress={() => { setPrompt(suggestion); void submit(suggestion); }} style={({ pressed }) => [styles.suggestion, pressed && styles.pressed]}><Text style={styles.suggestionText}>{suggestion}</Text></Pressable>)}
             </View>
-          ) : null}
+            {isLoading ? <><View style={styles.userMessage}><Text style={styles.userMessageText}>{prompt}</Text></View><AssistantMessage compact><View style={styles.typingRow}><ActivityIndicator color={colors.primary} size="small" /><Text style={styles.typingText}>Looking through your wardrobe and styling your options…</Text></View></AssistantMessage></> : null}
+            {error ? <AssistantMessage compact><Text style={styles.errorMessageText}>{error}</Text>{missingRoles.length ? <><Text style={styles.messageText}>{copy.stylist.incompleteTitle}</Text><View style={styles.missingRoles}>{missingRoles.map((role) => <Badge key={role} label={labelFor(roles, role)} />)}</View><Button onPress={() => onNavigate("wardrobe")} title={copy.stylist.addClothing} variant="secondary" /></> : null}</AssistantMessage> : null}
+          </View>
+          <View style={styles.composer}>
+            <TextInput accessibilityLabel="Message WEARO" editable={!isLoading} multiline onChangeText={setPrompt} onSubmitEditing={() => { if (prompt.trim() && !isLoading) void submit(); }} placeholder="Ask what to wear…" placeholderTextColor={colors.textSoft} returnKeyType="send" style={styles.composerInput} value={prompt} />
+            <Pressable accessibilityLabel="Send message" accessibilityRole="button" disabled={!prompt.trim() || isLoading} onPress={() => void submit()} style={({ pressed }) => [styles.sendButton, (!prompt.trim() || isLoading) && styles.sendButtonDisabled, pressed && styles.pressed]}>{isLoading ? <ActivityIndicator color={colors.surface} size="small" /> : <Send color={colors.surface} size={20} />}</Pressable>
+          </View>
+          <Text style={styles.composerHint}>WEARO uses your saved wardrobe and style profile.</Text>
         </View>
       ) : (
         <>
           {error ? <ErrorBanner message={error} /> : null}
+          <View style={styles.resultConversation}><View style={styles.userMessage}><Text style={styles.userMessageText}>{prompt}</Text></View><AssistantMessage compact><Text style={styles.assistantTitle}>I found {outfits.length} {outfits.length === 1 ? "look" : "looks"} for you.</Text><Text style={styles.messageText}>Open any option to see why it works, save it, or tell me if you wore it.</Text></AssistantMessage></View>
+          {recommendation?.ranking_source === "deterministic" ? <View style={styles.infoBanner}><Text style={styles.infoBannerText}>These recommendations were created from your wardrobe and preferences.</Text></View> : null}
           {isLoading ? <LoadingState /> : null}
           <View style={styles.resultsGrid}>
             {outfits.map((outfit, index) => (
@@ -170,6 +155,12 @@ export function AskWearoScreen({ onNavigate }: { onNavigate: (screen: AppScreen)
       )}
     </ScreenContainer>
   );
+}
+
+const suggestedPrompts = ["Casual dinner with friends tonight", "Smart look for work tomorrow", "Relaxed weekend outfit"];
+
+function AssistantMessage({ children, compact = false }: { children: React.ReactNode; compact?: boolean }) {
+  return <View style={styles.assistantRow}><View style={styles.stylistAvatar}><WearoMark size="sm" /></View><View style={[styles.assistantMessage, compact && styles.assistantMessageCompact]}><View style={styles.stylistLabel}><Sparkles color={colors.primary} size={14} /><Text style={styles.stylistLabelText}>WEARO STYLIST</Text></View>{children}</View></View>;
 }
 
 function OutfitGallery({ outfit, roles, large = false }: { outfit: Outfit; roles: MetadataOption[]; large?: boolean }) {
@@ -205,11 +196,12 @@ function messageFor(error: unknown) { return error instanceof Error ? error.mess
 
 const styles = StyleSheet.create({
   pageHeader: { alignItems: "center", flexDirection: "row", gap: spacing.md, marginBottom: spacing.xl }, headerCopy: { flex: 1, gap: spacing.xs }, title: { ...typography.display, color: colors.text }, subtitle: { ...typography.body, color: colors.textMuted },
-  promptLayout: { alignItems: "flex-start", flexDirection: "row", flexWrap: "wrap", gap: spacing.xl }, promptPanel: { ...shadows.soft, backgroundColor: colors.surface, borderRadius: radius.lg, flex: 1.2, gap: spacing.md, minWidth: 300, padding: spacing.xl }, fieldLabel: { ...typography.subheading, color: colors.text }, promptInput: { ...typography.body, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, color: colors.text, minHeight: 148, outlineStyle: "none", padding: spacing.md, textAlignVertical: "top" } as never,
+  chatShell: { ...shadows.soft, alignSelf: "center", backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, borderWidth: 1, maxWidth: 860, padding: spacing.xl, width: "100%" }, conversation: { gap: spacing.lg, minHeight: 350, paddingBottom: spacing.xl }, assistantRow: { alignItems: "flex-start", flexDirection: "row", gap: spacing.sm, maxWidth: 680 }, stylistAvatar: { alignItems: "center", backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.pill, borderWidth: 1, height: 48, justifyContent: "center", overflow: "hidden", width: 48 }, assistantMessage: { backgroundColor: colors.surfaceMuted, borderRadius: radius.lg, borderTopLeftRadius: 4, flexShrink: 1, gap: spacing.sm, padding: spacing.lg }, assistantMessageCompact: { padding: spacing.md }, stylistLabel: { alignItems: "center", flexDirection: "row", gap: spacing.xxs }, stylistLabelText: { ...typography.caption, color: colors.primary, fontSize: 10 }, assistantTitle: { ...typography.subheading, color: colors.text }, messageText: { ...typography.body, color: colors.textMuted }, suggestions: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs, marginLeft: 60 }, suggestion: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.pill, borderWidth: 1, minHeight: 40, justifyContent: "center", paddingHorizontal: spacing.md }, suggestionText: { ...typography.caption, color: colors.primary }, userMessage: { alignSelf: "flex-end", backgroundColor: colors.primary, borderRadius: radius.lg, borderBottomRightRadius: 4, maxWidth: "78%", paddingHorizontal: spacing.lg, paddingVertical: spacing.md }, userMessageText: { ...typography.body, color: colors.surface }, typingRow: { alignItems: "center", flexDirection: "row", gap: spacing.sm }, typingText: { ...typography.caption, color: colors.textMuted }, errorMessageText: { ...typography.body, color: colors.error }, composer: { alignItems: "flex-end", backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, borderWidth: 1, flexDirection: "row", gap: spacing.sm, padding: spacing.xs }, composerInput: { ...typography.body, color: colors.text, flex: 1, maxHeight: 128, minHeight: 50, outlineStyle: "none", paddingHorizontal: spacing.md, paddingVertical: spacing.sm, textAlignVertical: "center" } as never, sendButton: { alignItems: "center", backgroundColor: colors.primary, borderRadius: radius.pill, height: 46, justifyContent: "center", width: 46 }, sendButtonDisabled: { opacity: 0.45 }, composerHint: { ...typography.caption, color: colors.textSoft, fontSize: 10, marginTop: spacing.xs, textAlign: "center" }, resultConversation: { gap: spacing.md, marginBottom: spacing.xl },
   loadingPanel: { alignItems: "center", backgroundColor: "#F0EEFF", borderRadius: radius.lg, flex: 0.8, gap: spacing.sm, minWidth: 260, padding: spacing.xxxl }, loadingTitle: { ...typography.heading, color: colors.text, textAlign: "center" }, loadingText: { ...typography.body, color: colors.textMuted, textAlign: "center" },
   incompletePanel: { backgroundColor: "#FFF8E8", borderColor: "#F4D999", borderRadius: radius.md, borderWidth: 1, gap: spacing.md, padding: spacing.md }, missingRoles: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs },
   resultsGrid: { alignItems: "stretch", flexDirection: "row", flexWrap: "wrap", gap: spacing.lg }, outfitCard: { ...shadows.soft, backgroundColor: colors.surface, borderRadius: radius.md, flexGrow: 1, gap: spacing.md, minWidth: 280, padding: spacing.lg, width: "31%" }, outfitCardHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" }, outfitNumber: { ...typography.caption, color: colors.primary }, score: { ...typography.caption, color: colors.textMuted, fontWeight: "600" }, detailLink: { ...typography.button, color: colors.primary }, tryAgainButton: { alignSelf: "center", marginTop: spacing.xl, minWidth: 220 },
   gallery: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }, largeGallery: { flex: 1.3, minWidth: 300 }, galleryItem: { backgroundColor: colors.surfaceMuted, borderRadius: radius.md, flexGrow: 1, overflow: "hidden", width: "30%" }, clothingImage: { aspectRatio: 0.82, width: "100%" }, imagePlaceholder: { alignItems: "center", aspectRatio: 0.82, backgroundColor: "#EFECFF", justifyContent: "center" }, placeholderMark: { color: colors.primary, fontSize: 32, fontWeight: "800" }, itemCopy: { gap: 2, padding: spacing.sm }, role: { ...typography.caption, color: colors.primary, textTransform: "capitalize" }, itemName: { ...typography.caption, color: colors.text, fontWeight: "700" },
   detailLayout: { alignItems: "flex-start", flexDirection: "row", gap: spacing.xl }, mobileStack: { flexDirection: "column" }, detailPanel: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, borderWidth: 1, flex: 0.7, gap: spacing.lg, minWidth: 280, padding: spacing.xl }, badgeRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }, badge: { backgroundColor: "#EFECFF", borderRadius: radius.pill, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs }, badgeText: { ...typography.caption, color: colors.primary, textTransform: "capitalize" }, info: { gap: spacing.xxs }, infoLabel: { ...typography.caption, color: colors.textMuted }, infoValue: { ...typography.body, color: colors.text }, explanation: { gap: spacing.xs }, sectionTitle: { ...typography.subheading, color: colors.text }, body: { ...typography.body, color: colors.textMuted },
   backButton: { alignItems: "center", backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.pill, borderWidth: 1, height: 44, justifyContent: "center", width: 44 }, backSymbol: { color: colors.text, fontSize: 32, lineHeight: 34 }, errorBanner: { backgroundColor: "#FFF0ED", borderRadius: radius.md, padding: spacing.md }, errorText: { ...typography.caption, color: colors.error }, inlineLoading: { alignItems: "center", flexDirection: "row", gap: spacing.sm, paddingVertical: spacing.lg }, pressed: { opacity: 0.82 }
+  ,infoBanner: { backgroundColor: "#EEF3FF", borderRadius: radius.md, marginBottom: spacing.lg, padding: spacing.md }, infoBannerText: { ...typography.caption, color: colors.info }
 });
