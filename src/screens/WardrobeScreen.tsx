@@ -251,7 +251,7 @@ function ItemForm(props: { title: string; form: ClothingItemInput; image: Picked
 function ItemDetail(props: { item: ClothingItem; metadata: ReturnType<typeof useAppData>["metadata"]; error: string | null; isSubmitting: boolean; confirmDelete: boolean; onBack: () => void; onEdit: () => void; onDelete: () => void; onDeleteCancel: () => void; onDeleteConfirm: () => void; onPolish: () => void; onReanalyze: () => void }) {
   const url = resolveImageUrl(props.item.display_image?.url);
   return <ScreenContainer>
-    <View style={styles.subHeader}><BackButton onPress={props.onBack} /><View style={styles.headerCopy}><Text style={styles.title}>{props.item.name || "Untitled item"}</Text><StatusBadge status={props.item.status} statuses={props.metadata?.clothing_items.statuses || []} /></View></View>
+    <View style={styles.subHeader}><BackButton onPress={props.onBack} /><View style={styles.headerCopy}><Text style={styles.title}>{itemDisplayName(props.item, props.metadata)}</Text><StatusBadge status={props.item.status} statuses={props.metadata?.clothing_items.statuses || []} /></View></View>
     <View style={styles.detailLayout}>
       <View style={styles.detailImageFrame}>{url ? <AuthenticatedImage url={props.item.display_image?.url} style={styles.detailImage} /> : <View style={styles.imagePlaceholder}><Text style={styles.imagePlaceholderText}>No image</Text></View>}</View>
       <View style={styles.detailCard}>
@@ -285,6 +285,9 @@ function Notice({ title, text, tone = "info", loading = false }: { title: string
 function ErrorBanner({ message }: { message: string }) { return <View style={styles.errorBanner}><Text style={styles.errorText}>{message}</Text></View>; }
 function Loading({ label }: { label: string }) { return <View style={styles.loading}><ActivityIndicator color={colors.primary} /><Text style={styles.loadingText}>{label}</Text></View>; }
 function inputFromItem(item: ClothingItem): ClothingItemInput { return { name: item.name || "", garment_type: item.garment_type || "", category: item.category || "", subcategory: item.subcategory || "", primary_color: item.primary_color || "", secondary_colors: item.secondary_colors || [], pattern: item.pattern || "", material: item.material || "", fit: item.fit || "", season_tags: item.season_tags || [], occasion_tags: item.occasion_tags || [], style_tags: item.style_tags || [], cultural_tags: item.cultural_tags || [], formality_score: item.formality_score ? String(item.formality_score) : "" }; }
+function itemDisplayName(item: ClothingItem, metadata: ReturnType<typeof useAppData>["metadata"]) {
+  return item.name?.trim() || item.garment_type?.trim() || subcategoryLabel(metadata?.clothing_items.categories || [], item.subcategory) || labelFor(metadata?.clothing_items.categories || [], item.category) || "Wardrobe item";
+}
 function humanize(value: string) { return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()); }
 function toggle(values: string[], value: string) { return values.includes(value) ? values.filter((item) => item !== value) : [...values, value]; }
 function labelFor(options: MetadataOption[], key?: string | null) { return options.find((option) => option.key === key)?.label || key || ""; }

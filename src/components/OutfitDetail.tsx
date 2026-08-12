@@ -11,6 +11,7 @@ import { colors, radius, spacing, typography } from "../theme";
 import { pickWardrobeImage } from "../utils/imagePicker";
 import { Button } from "./Button";
 import { AuthenticatedImage } from "./AuthenticatedImage";
+import { OutfitCover } from "./OutfitCover";
 
 const dislikeReasons: Array<{ key: DislikeReason; label: string }> = [
   { key: "too_formal", label: "Too formal" }, { key: "too_casual", label: "Too casual" },
@@ -71,6 +72,17 @@ export function OutfitDetail({ initialOutfit, roles, onChange }: { initialOutfit
     return () => { cancelled = true; clearTimeout(timeout); };
   }, [outfit.id, visualization]);
 
+  useEffect(() => {
+    if (visualization?.status !== "ready") return;
+    let cancelled = false;
+    void AppService.outfit(outfit.id).then((response) => {
+      if (cancelled) return;
+      setOutfit(response.data);
+      onChange?.(response.data);
+    }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [outfit.id, visualization?.id, visualization?.status]);
+
   async function updateStatus(status: OutfitStatus) {
     await run(async () => {
       const response = await AppService.updateOutfit(outfit.id, { status });
@@ -130,7 +142,7 @@ export function OutfitDetail({ initialOutfit, roles, onChange }: { initialOutfit
   const showcaseVisualization = visualization?.status === "ready" && visualization.image?.url
     ? visualization
     : preferredReadyVisualization(storedVisualizations);
-  const showcaseUrl = showcaseVisualization?.image?.url || outfit.cover_image?.url;
+  const showcaseUrl = showcaseVisualization?.image?.url;
 
   async function run(action: () => Promise<void>) {
     setIsSaving(true); setError(null);
@@ -147,7 +159,7 @@ export function OutfitDetail({ initialOutfit, roles, onChange }: { initialOutfit
         {visualization?.guidance?.message ? <Text style={styles.hint}>{visualization.guidance.message}</Text> : null}
         {visualization?.status === "failed" ? <Text style={styles.errorText}>{copy.visualization.failed}</Text> : null}
       </View>
-      {showcaseUrl ? <><View style={styles.showcase}><AuthenticatedImage resizeMode="contain" url={showcaseUrl} style={styles.showcaseImage} />{showcaseVisualization ? <View style={styles.showcaseCaption}><Badge text={showcaseVisualization.mode === "try_on" ? "Personalized try-on" : "AI flat lay"} /><Text style={styles.showcaseHint}>Generated outfit visualization</Text></View> : null}</View><View style={styles.itemsSection}><Text style={styles.itemsSectionTitle}>Items in this look</Text><OutfitItems outfit={outfit} roles={roles} /></View></> : <OutfitItems outfit={outfit} roles={roles} />}
+      <View style={styles.showcase}>{showcaseUrl ? <AuthenticatedImage resizeMode="contain" url={showcaseUrl} style={styles.showcaseImage} /> : <OutfitCover coverImages={outfit.cover_images} style={styles.showcaseImage} />}{showcaseVisualization ? <View style={styles.showcaseCaption}><Badge text={showcaseVisualization.mode === "try_on" ? "Personalized try-on" : "AI flat lay"} /><Text style={styles.showcaseHint}>Generated outfit visualization</Text></View> : null}</View><View style={styles.itemsSection}><Text style={styles.itemsSectionTitle}>Items in this look</Text><OutfitItems outfit={outfit} roles={roles} /></View>
     </View>
     <View style={[styles.panel, !usesWideDetailLayout && styles.stackedPanel]}>
       <View style={styles.badges}><Badge text={humanize(outfit.status)} />{outfit.recommendation_score != null ? <Badge text={`${Math.round(outfit.recommendation_score)}% match`} /> : null}</View>

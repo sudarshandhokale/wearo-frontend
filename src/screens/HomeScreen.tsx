@@ -5,7 +5,7 @@ import { AppService } from "../api/AppService";
 import type { Outfit, WearHistory } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { useAppData } from "../context/AppDataContext";
-import { AuthenticatedImage } from "../components/AuthenticatedImage";
+import { OutfitCover } from "../components/OutfitCover";
 import { ScreenContainer } from "../components/ScreenContainer";
 import { useResponsive } from "../hooks/useResponsive";
 import type { Navigate } from "../navigation/types";
@@ -30,7 +30,7 @@ export function HomeScreen({ onNavigate }: HomeScreenProps) {
     AIStylistService.suggestedPrompts().then(setPrompts);
     let cancelled = false;
     void AppService.wearHistory(1, 3).then(async (response) => {
-      const resolved = await Promise.allSettled(response.data.map(async (wear) => ({ ...wear, outfit: (await AppService.outfit(wear.outfit_id)).data })));
+      const resolved = await Promise.allSettled(response.data.map(async (wear) => ({ ...wear, outfit: wear.outfit || (await AppService.outfit(wear.outfit_id)).data })));
       if (!cancelled) setRecentWears(resolved.flatMap((result) => result.status === "fulfilled" ? [result.value] : []));
     }).catch(() => undefined);
     return () => { cancelled = true; };
@@ -153,7 +153,7 @@ export function HomeScreen({ onNavigate }: HomeScreenProps) {
             <View style={styles.recentLookRow}>
               {recentWears.map((wear) => (
                 <Pressable accessibilityRole="button" key={wear.id} onPress={() => onNavigate("history")} style={({ pressed }) => [styles.recentLook, pressed && styles.pressed]}>
-                  {wear.outfit.cover_image?.url ? <AuthenticatedImage resizeMode="cover" url={wear.outfit.cover_image.url} style={styles.recentImage} /> : <View style={styles.recentPlaceholder}><Text style={styles.recentPlaceholderText}>W</Text></View>}
+                  <OutfitCover coverImages={wear.outfit.cover_images} style={styles.recentImage} />
                   <Text numberOfLines={2} style={styles.recentName}>{wear.outfit.name}</Text>
                   <Text style={styles.recentDate}>{formatWornDate(wear.worn_on)}</Text>
                   {wear.occasion ? <Text numberOfLines={1} style={styles.recentOccasion}>{humanize(wear.occasion)}</Text> : null}

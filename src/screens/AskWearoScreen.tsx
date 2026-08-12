@@ -3,10 +3,10 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 import { Send, Sparkles } from "lucide-react-native";
 
 import { ApiError } from "../api/ApiError";
-import { AppService, resolveImageUrl } from "../api/AppService";
+import { AppService } from "../api/AppService";
 import type { ContextualSuggestion, MetadataOption, Outfit, RecommendationErrorDetails, RecommendationRequest, StylingPlan } from "../api/types";
 import { Button } from "../components/Button";
-import { AuthenticatedImage } from "../components/AuthenticatedImage";
+import { OutfitCover } from "../components/OutfitCover";
 import { OutfitDetail } from "../components/OutfitDetail";
 import { ScreenContainer } from "../components/ScreenContainer";
 import { StylingPlanDetail } from "../components/StylingPlans";
@@ -190,26 +190,8 @@ function AssistantMessage({ children, compact = false }: { children: React.React
 }
 
 function OutfitGallery({ outfit, roles, large = false }: { outfit: Outfit; roles: MetadataOption[]; large?: boolean }) {
-  if (outfit.cover_image?.url) {
-    return <View style={[styles.gallery, large && styles.largeGallery]}><AuthenticatedImage resizeMode="contain" url={outfit.cover_image.url} style={styles.outfitCover} /></View>;
-  }
-  const sorted = [...outfit.items].sort((a, b) => a.position - b.position);
-  return (
-    <View style={[styles.gallery, large && styles.largeGallery]}>
-      {sorted.map((item) => {
-        const url = resolveImageUrl(item.clothing_item.cover_image?.url);
-        return (
-          <View key={item.id} style={styles.galleryItem}>
-            {url ? <AuthenticatedImage resizeMode="cover" url={item.clothing_item.cover_image?.url} style={styles.clothingImage} /> : <View style={styles.imagePlaceholder}><Text style={styles.placeholderMark}>W</Text></View>}
-            <View style={styles.itemCopy}>
-              <Text style={styles.role}>{labelFor(roles, item.role)}</Text>
-              <Text numberOfLines={1} style={styles.itemName}>{item.clothing_item.name || item.clothing_item.subcategory || "Clothing item"}</Text>
-            </View>
-          </View>
-        );
-      })}
-    </View>
-  );
+  void roles;
+  return <View style={[styles.gallery, large && styles.largeGallery]}><OutfitCover coverImages={outfit.cover_images} style={styles.outfitCover} /></View>;
 }
 
 function BackButton({ onPress }: { onPress: () => void }) {

@@ -40,8 +40,8 @@ export type CoverImage = ApiImage & {
   kind: "outfit_try_on" | "outfit_flat_lay" | "polished_item" | "original_item";
   generated: boolean;
   personalized: boolean;
-  visualization_id?: number | string;
-  clothing_item_id?: number | string;
+  visualization_id?: number;
+  clothing_item_id?: number;
 };
 
 export type AuthResponseData = {
@@ -221,7 +221,7 @@ export type Outfit = {
   feedback_note: string | null;
   status_updated_at: string | null;
   recommended_for: string | null;
-  cover_image: CoverImage | null;
+  cover_images: CoverImage[];
   items: OutfitItem[];
   created_at: string;
   updated_at: string;
@@ -247,7 +247,7 @@ export type ContextualSuggestion = {
 };
 
 export type WearInput = { worn_on: string; occasion?: string | null; context?: Record<string, unknown> };
-export type WearHistory = { id: number | string; outfit_id: number | string; worn_on: string; occasion: string | null; context: Record<string, unknown>; created_at: string };
+export type WearHistory = { id: number | string; outfit_id: number | string; worn_on: string; occasion: string | null; context: Record<string, unknown>; outfit?: Outfit; created_at: string };
 export type FeedbackReaction = "liked" | "disliked";
 export type DislikeReason = "too_formal" | "too_casual" | "dont_like_colors" | "recently_worn" | "not_comfortable" | "not_my_style" | "other";
 export type OutfitFeedback = { id: number | string; outfit_id: number | string; reaction: FeedbackReaction; reason: DislikeReason | null; notes: string | null; created_at: string; updated_at: string };
