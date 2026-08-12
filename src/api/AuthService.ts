@@ -1,4 +1,4 @@
-import type { ApiUser, AuthResponseData, LoginParams, RegisterParams } from "./types";
+import type { ApiUser, AuthResponseData, LoginParams, RegisterParams, UpdateUserParams } from "./types";
 import { RestService } from "./RestService";
 
 type UserEnvelope = AuthResponseData | ApiUser;
@@ -22,5 +22,9 @@ export class AuthService {
 
   static me(token: string) {
     return RestService.GET<UserEnvelope>("/api/v1/me", token);
+  }
+
+  static updateMe(params: UpdateUserParams, token: string) {
+    return RestService.PATCH<UserEnvelope>("/api/v1/me", { user: params }, token);
   }
 }

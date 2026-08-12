@@ -24,6 +24,15 @@
     "extra": {
       "apiBaseUrl": ""
     },
-    "plugins": ["expo-secure-store"]
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow WEARO to add clothing photos to your wardrobe.",
+          "cameraPermission": "Allow WEARO to photograph clothing for your wardrobe."
+        }
+      ]
+    ]
   }
 }

@@ -19,6 +19,7 @@ type RequestOptions = {
 export type RestResult<T> = {
   data: T;
   authorizationHeader: string | null;
+  meta: unknown | null;
 };
 
 export class RestService {
@@ -38,11 +39,21 @@ export class RestService {
     return this.request<T>(path, { method: "DELETE", token });
   }
 
+  static POST_FORM<T>(path: string, body: FormData, token?: string | null) {
+    return this.request<T>(path, { method: "POST", body, token });
+  }
+
+  static PATCH_FORM<T>(path: string, body: FormData, token?: string | null) {
+    return this.request<T>(path, { method: "PATCH", body, token });
+  }
+
   private static async request<T>(path: string, options: RequestOptions): Promise<RestResult<T>> {
-    const headers: Record<string, string> = {
-      Accept: "application/json",
-      "Content-Type": "application/json"
-    };
+    const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
+    const headers: Record<string, string> = { Accept: "application/json" };
+
+    if (!isFormData) {
+      headers["Content-Type"] = "application/json";
+    }
 
     if (options.token) {
       headers.Authorization = `Bearer ${options.token}`;
@@ -51,7 +62,7 @@ export class RestService {
     const response = await fetch(`${API_BASE_URL}${path}`, {
       method: options.method,
       headers,
-      body: options.body ? JSON.stringify(options.body) : undefined
+      body: options.body ? (isFormData ? (options.body as FormData) : JSON.stringify(options.body)) : undefined
     });
 
     return this.handleResponse<T>(response);
@@ -69,7 +80,8 @@ export class RestService {
     if (response.ok && payload.success) {
       return {
         data: payload.data,
-        authorizationHeader: response.headers.get("Authorization") || response.headers.get("authorization")
+        authorizationHeader: response.headers.get("Authorization") || response.headers.get("authorization"),
+        meta: payload.meta
       };
     }
 

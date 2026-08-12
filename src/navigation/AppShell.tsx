@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useResponsive } from "../hooks/useResponsive";
 import { colors, radius, shadows, spacing, typography } from "../theme";
-import { WearoLogo, WearoMark } from "../components/WearoLogo";
+import { WearoMark, WearoResponsiveLogo, WearoWebLogo } from "../components/WearoLogo";
 import { AskWearoScreen } from "../screens/AskWearoScreen";
 import { HistoryScreen } from "../screens/HistoryScreen";
 import { HomeScreen } from "../screens/HomeScreen";
@@ -25,7 +25,14 @@ export function AppShell() {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.shell}>
         {usesSidebar ? <Sidebar activeScreen={activeScreen} onSelect={setActiveScreen} /> : null}
-        <View style={styles.content}>{screen}</View>
+        <View style={styles.content}>
+          {!usesSidebar ? (
+            <View style={styles.mobileHeader}>
+              <WearoResponsiveLogo compact />
+            </View>
+          ) : null}
+          {screen}
+        </View>
         {!usesSidebar ? <BottomNav activeScreen={activeScreen} onSelect={setActiveScreen} /> : null}
       </View>
     </SafeAreaView>
@@ -61,7 +68,7 @@ function Sidebar({
 }) {
   return (
     <View style={styles.sidebar}>
-      <WearoLogo />
+      <WearoWebLogo compact />
       <View style={styles.sidebarNav}>
         {desktopNavItems.map((item) => (
           <NavButton
@@ -155,6 +162,15 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1
+  },
+  mobileHeader: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderBottomColor: colors.border,
+    borderBottomWidth: 1,
+    minHeight: 76,
+    justifyContent: "center",
+    paddingHorizontal: spacing.lg
   },
   sidebar: {
     backgroundColor: colors.surface,

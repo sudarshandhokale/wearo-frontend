@@ -1,7 +1,7 @@
 import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from "react";
 
 import { AuthService } from "../api/AuthService";
-import type { ApiUser, AuthResponseData, LoginParams, RegisterParams } from "../api/types";
+import type { ApiUser, AuthResponseData, LoginParams, RegisterParams, UpdateUserParams } from "../api/types";
 import { parseBearerToken } from "./authToken";
 import { tokenStorage } from "./tokenStorage";
 
@@ -11,6 +11,7 @@ type AuthContextValue = {
   user: ApiUser | null;
   login: (params: LoginParams) => Promise<void>;
   register: (params: RegisterParams) => Promise<void>;
+  updateUser: (params: UpdateUserParams) => Promise<ApiUser>;
   logout: () => Promise<void>;
 };
 
@@ -92,6 +93,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const response = await AuthService.register(params);
           await persistAuth(response.authorizationHeader);
           setUser(extractUser(response.data));
+        } finally {
+          setIsSubmitting(false);
+        }
+      },
+      async updateUser(params) {
+        const token = await tokenStorage.get();
+        if (!token) throw new Error("Your session has expired. Please sign in again.");
+        setIsSubmitting(true);
+        try {
+          const response = await AuthService.updateMe(params, token);
+          const updatedUser = extractUser(response.data);
+          setUser(updatedUser);
+          return updatedUser;
         } finally {
           setIsSubmitting(false);
         }

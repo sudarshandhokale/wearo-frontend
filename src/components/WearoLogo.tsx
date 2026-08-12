@@ -1,6 +1,7 @@
 import { Image, StyleSheet, Text, View } from "react-native";
 
 import { colors, radius, spacing, typography } from "../theme";
+import { useResponsive } from "../hooks/useResponsive";
 
 type LogoProps = {
   compact?: boolean;
@@ -73,9 +74,9 @@ export function WearoVerticalLogo({
   );
 }
 
-export function WearoMobileLogo() {
+export function WearoMobileLogo({ compact = false }: { compact?: boolean }) {
   return (
-    <View style={styles.mobileLogoFrame}>
+    <View style={[styles.mobileLogoFrame, compact && styles.mobileLogoFrameCompact]}>
       <Image
         accessibilityLabel="WEARO Your Personal AI Stylist"
         resizeMode="cover"
@@ -86,9 +87,9 @@ export function WearoMobileLogo() {
   );
 }
 
-export function WearoWebLogo() {
+export function WearoWebLogo({ compact = false }: { compact?: boolean }) {
   return (
-    <View style={styles.webLogoFrame}>
+    <View style={[styles.webLogoFrame, compact && styles.webLogoFrameCompact]}>
       <Image
         accessibilityLabel="WEARO Your Personal AI Stylist"
         resizeMode="cover"
@@ -97,6 +98,12 @@ export function WearoWebLogo() {
       />
     </View>
   );
+}
+
+export function WearoResponsiveLogo({ compact = false }: { compact?: boolean }) {
+  const { usesSidebar } = useResponsive();
+
+  return usesSidebar ? <WearoWebLogo compact={compact} /> : <WearoMobileLogo compact={compact} />;
 }
 
 function LogoSlogan({ compact = false, light = false }: { compact?: boolean; light?: boolean }) {
@@ -146,6 +153,10 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     width: 240
   },
+  mobileLogoFrameCompact: {
+    height: 82,
+    width: 134
+  },
   mobileLogoImage: {
     height: "100%",
     width: "100%"
@@ -155,6 +166,10 @@ const styles = StyleSheet.create({
     height: 96,
     overflow: "hidden",
     width: 330
+  },
+  webLogoFrameCompact: {
+    height: 56,
+    width: 192
   },
   webLogoImage: {
     height: "100%",

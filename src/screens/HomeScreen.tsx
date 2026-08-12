@@ -2,12 +2,11 @@ import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { useAuth } from "../auth/AuthContext";
-import { RecommendationCard } from "../components/RecommendationCard";
+import { useAppData } from "../context/AppDataContext";
 import { ScreenContainer } from "../components/ScreenContainer";
 import { useResponsive } from "../hooks/useResponsive";
 import type { AppScreen } from "../navigation/types";
 import { AIStylistService, SuggestedPrompt } from "../services/AIStylistService";
-import { OutfitRecommendation, RecommendationService } from "../services/RecommendationService";
 import { colors, radius, shadows, spacing, typography } from "../theme";
 
 type HomeScreenProps = {
@@ -16,21 +15,46 @@ type HomeScreenProps = {
 
 export function HomeScreen({ onNavigate }: HomeScreenProps) {
   const { user } = useAuth();
+  const { saveStyleProfile, styleProfile } = useAppData();
   const { usesSidebar } = useResponsive();
-  const [recommendation, setRecommendation] = useState<OutfitRecommendation | null>(null);
   const [prompts, setPrompts] = useState<SuggestedPrompt[]>([]);
 
   useEffect(() => {
-    RecommendationService.getTodayRecommendation().then(setRecommendation);
     AIStylistService.suggestedPrompts().then(setPrompts);
   }, []);
 
   const firstName = user?.first_name || "there";
+  const onboardingStep = Number(styleProfile?.additional_preferences.onboarding_step) || 1;
+  const onboardingProgress = Math.min(100, Math.max(20, onboardingStep * 20));
+
+  async function resumeOnboarding() {
+    if (!styleProfile) return;
+    await saveStyleProfile({
+      preferred_styles: styleProfile.preferred_styles,
+      preferred_colors: styleProfile.preferred_colors,
+      disliked_colors: styleProfile.disliked_colors,
+      fit_preferences: styleProfile.fit_preferences,
+      onboarding_completed: false,
+      additional_preferences: {
+        ...styleProfile.additional_preferences,
+        onboarding_deferred: false
+      }
+    });
+  }
 
   return (
     <ScreenContainer>
       <View style={[styles.layout, usesSidebar && styles.desktopLayout]}>
         <View style={styles.mainColumn}>
+          {!styleProfile?.onboarding_completed ? (
+            <Pressable onPress={() => void resumeOnboarding()} style={styles.completionBanner}>
+              <View style={styles.completionCopy}>
+                <Text style={styles.completionTitle}>Complete your style profile</Text>
+                <Text style={styles.completionText}>{onboardingProgress}% complete · Continue where you left off</Text>
+              </View>
+              <Text style={styles.completionArrow}>›</Text>
+            </Pressable>
+          ) : null}
           <View style={styles.hero}>
             <Text style={styles.kicker}>Your wardrobe. Your style. Perfected by AI.</Text>
             <Text style={styles.title}>Good morning,{"\n"}{firstName} 👋</Text>
@@ -52,14 +76,14 @@ export function HomeScreen({ onNavigate }: HomeScreenProps) {
             </View>
           </View>
 
-          {recommendation ? (
-            <RecommendationCard recommendation={recommendation} />
-          ) : (
-            <View style={styles.loadingCard}>
-              <Text style={styles.loadingTitle}>WEARO is styling your day</Text>
-              <Text style={styles.loadingText}>Checking wardrobe, weather, and recent looks.</Text>
+          <Pressable onPress={() => onNavigate("ask")} style={styles.stylistCard}>
+            <View style={styles.stylistMark}><Text style={styles.stylistMarkText}>✦</Text></View>
+            <View style={styles.stylistCopy}>
+              <Text style={styles.loadingTitle}>Create an outfit from your wardrobe</Text>
+              <Text style={styles.loadingText}>Tell WEARO where you're going and get up to three complete looks.</Text>
             </View>
-          )}
+            <Text style={styles.completionArrow}>›</Text>
+          </Pressable>
         </View>
 
         <View style={styles.sideColumn}>
@@ -173,6 +197,33 @@ const styles = StyleSheet.create({
   hero: {
     gap: spacing.md
   },
+  completionBanner: {
+    alignItems: "center",
+    backgroundColor: "#EFECFF",
+    borderColor: "#D8D1FF",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.md,
+    padding: spacing.md
+  },
+  completionCopy: {
+    flex: 1,
+    gap: 2
+  },
+  completionTitle: {
+    ...typography.button,
+    color: colors.text
+  },
+  completionText: {
+    ...typography.caption,
+    color: colors.textMuted,
+    fontWeight: "500"
+  },
+  completionArrow: {
+    color: colors.primary,
+    fontSize: 28
+  },
   kicker: {
     ...typography.caption,
     color: colors.primary
@@ -216,6 +267,32 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     gap: spacing.xs,
     padding: spacing.xl
+  },
+  stylistCard: {
+    ...shadows.card,
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    flexDirection: "row",
+    gap: spacing.md,
+    padding: spacing.lg
+  },
+  stylistMark: {
+    alignItems: "center",
+    backgroundColor: "#EFECFF",
+    borderRadius: radius.pill,
+    height: 48,
+    justifyContent: "center",
+    width: 48
+  },
+  stylistMarkText: {
+    color: colors.primary,
+    fontSize: 22,
+    fontWeight: "800"
+  },
+  stylistCopy: {
+    flex: 1,
+    gap: spacing.xxs
   },
   loadingTitle: {
     ...typography.subheading,

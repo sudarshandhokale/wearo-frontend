@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   KeyboardAvoidingView,
   KeyboardTypeOptions,
@@ -16,17 +16,19 @@ import type { TextStyle } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { ApiError } from "../api/ApiError";
+import { AppService } from "../api/AppService";
 import type { LoginParams, RegisterParams } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { Button } from "../components/Button";
 import { WearoMobileLogo, WearoWebLogo } from "../components/WearoLogo";
 import { useResponsive } from "../hooks/useResponsive";
 import { colors, radius, shadows, spacing, typography } from "../theme";
+import { deviceTimezone, inferDeviceCountryCode } from "../utils/deviceLocation";
 
 type AuthMode = "login" | "signup";
-type AuthFieldIcon = "email" | "password" | "user";
+type AuthFieldIcon = "email" | "password" | "user" | "location";
 
-const defaultTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+const defaultTimezone = deviceTimezone;
 const authBackground = require("../../assets/auth-background.png");
 const webInputReset =
   Platform.OS === "web" ? ({ outlineStyle: "none" } as unknown as TextStyle) : undefined;
@@ -38,7 +40,7 @@ const signupDefaults: RegisterParams = {
   password: "",
   password_confirmation: "",
   timezone: defaultTimezone,
-  country_code: "US",
+  country_code: inferDeviceCountryCode(),
   preferred_city: ""
 };
 
@@ -54,6 +56,20 @@ export function AuthScreen() {
   const [showSignupConfirmation, setShowSignupConfirmation] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [signupCountries, setSignupCountries] = useState<Array<{ code: string; name: string }>>([]);
+
+  useEffect(() => {
+    let active = true;
+    AppService.metadata().then((response) => {
+      if (!active) return;
+      setSignupCountries(response.data.countries);
+      setSignupForm((current) => ({
+        ...current,
+        country_code: response.data.timezone_countries[deviceTimezone] || current.country_code
+      }));
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
 
   const isSignup = mode === "signup";
 
@@ -103,6 +119,14 @@ export function AuthScreen() {
       nextFieldErrors.lastName = "Last name is required.";
     }
 
+    if (!signupForm.preferred_city.trim()) {
+      nextFieldErrors.preferredCity = "Preferred city is required.";
+    }
+
+    if (!signupForm.country_code.trim()) {
+      nextFieldErrors.country = "Country is required.";
+    }
+
     if (!signupForm.email.trim()) {
       nextFieldErrors.signupEmail = "Email address is required.";
     } else if (!isValidEmail(signupForm.email)) {
@@ -140,7 +164,7 @@ export function AuthScreen() {
         email: signupForm.email.trim(),
         timezone: signupForm.timezone.trim() || defaultTimezone,
         country_code: signupForm.country_code.trim().toUpperCase(),
-        preferred_city: signupForm.preferred_city.trim()
+        preferred_city: titleizeLocation(signupForm.preferred_city.trim())
       });
     } catch (caughtError) {
       setError(getErrorMessage(caughtError));
@@ -286,6 +310,7 @@ export function AuthScreen() {
                             textContentType="emailAddress"
                             value={signupForm.email}
                           />
+                          <SignupLocationFields countries={signupCountries} countryCode={signupForm.country_code} city={signupForm.preferred_city} cityError={fieldErrors.preferredCity} onCountry={(value) => { updateSignup("country_code", value); setFieldErrors((current) => ({ ...current, country: "" })); }} onCity={(value) => { updateSignup("preferred_city", titleizeLocation(value)); setFieldErrors((current) => ({ ...current, preferredCity: "" })); }} />
                           <AuthField
                             icon="password"
                             error={fieldErrors.signupPassword}
@@ -469,6 +494,7 @@ export function AuthScreen() {
                       textContentType="emailAddress"
                       value={signupForm.email}
                     />
+                    <SignupLocationFields countries={signupCountries} countryCode={signupForm.country_code} city={signupForm.preferred_city} cityError={fieldErrors.preferredCity} onCountry={(value) => { updateSignup("country_code", value); setFieldErrors((current) => ({ ...current, country: "" })); }} onCity={(value) => { updateSignup("preferred_city", titleizeLocation(value)); setFieldErrors((current) => ({ ...current, preferredCity: "" })); }} />
                     <AuthField
                       icon="password"
                       error={fieldErrors.signupPassword}
@@ -553,6 +579,13 @@ function titleizeName(value: string) {
     .split(" ")
     .map((word) => (word ? `${word.charAt(0).toUpperCase()}${word.slice(1).toLowerCase()}` : ""))
     .join(" ");
+}
+
+function titleizeLocation(value: string) {
+  return value
+    .split(/([\s'-]+)/)
+    .map((part) => (/^[\s'-]+$/.test(part) ? part : `${part.charAt(0).toUpperCase()}${part.slice(1).toLowerCase()}`))
+    .join("");
 }
 
 function getErrorMessage(caughtError: unknown) {
@@ -709,12 +742,28 @@ function AuthFieldIconView({ icon }: { icon: AuthFieldIcon }) {
     );
   }
 
+  if (icon === "location") {
+    return <View style={styles.drawnIconBox}><Text style={styles.locationIcon}>⌖</Text></View>;
+  }
+
   return (
     <View style={styles.drawnIconBox}>
       <View style={styles.lockShackle} />
       <View style={styles.lockBody} />
     </View>
   );
+}
+
+function SignupLocationFields({ countries, countryCode, city, cityError, onCity, onCountry }: { countries: Array<{ code: string; name: string }>; countryCode: string; city: string; cityError?: string; onCity: (value: string) => void; onCountry: (value: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const filtered = query.trim() ? countries.filter((country) => country.code.toLowerCase().startsWith(query.trim().toLowerCase()) || country.name.toLowerCase().split(/\s+/).some((word) => word.startsWith(query.trim().toLowerCase()))) : countries;
+  return <View style={[styles.signupLocationGroup, open && styles.signupLocationOpen]}><AuthField autoCapitalize="words" error={cityError} icon="location" onChangeText={onCity} placeholder="Preferred city" textContentType="addressCity" value={city} /><View style={styles.signupCountryField}><Pressable accessibilityRole="button" onPress={() => setOpen((current) => !current)} style={[styles.detectedCountry, open && styles.detectedCountryOpen]}><View style={styles.drawnIconBox}><Text style={styles.locationIcon}>◎</Text></View><View style={styles.detectedCountryCopy}><Text numberOfLines={1} style={styles.detectedCountryValue}>{countryDisplayName(countryCode)}</Text><Text style={styles.detectedCountryHint}>Country</Text></View><Text style={styles.signupCountryArrow}>{open ? "⌃" : "⌄"}</Text></Pressable>{open ? <View style={styles.signupCountryMenu}><TextInput autoCapitalize="words" autoFocus onChangeText={(value) => setQuery(titleizeLocation(value))} placeholder="Search countries" placeholderTextColor={colors.textSoft} style={styles.signupCountrySearch} value={query} /><ScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled style={styles.signupCountryList}>{filtered.map((country) => <Pressable key={country.code} onPress={() => { onCountry(country.code); setOpen(false); setQuery(""); }} style={[styles.signupCountryOption, country.code === countryCode && styles.signupCountryOptionSelected]}><Text numberOfLines={1} style={[styles.signupCountryName, country.code === countryCode && styles.signupCountryNameSelected]}>{country.name}</Text><Text style={styles.signupCountryCode}>{country.code}</Text></Pressable>)}</ScrollView></View> : null}</View></View>;
+}
+
+function countryDisplayName(countryCode: string) {
+  try { return new Intl.DisplayNames([Intl.DateTimeFormat().resolvedOptions().locale], { type: "region" }).of(countryCode) || countryCode; }
+  catch { return countryCode; }
 }
 
 function InlineLink({
@@ -998,6 +1047,106 @@ const styles = StyleSheet.create({
   },
   fieldInvalid: {
     borderColor: colors.error
+  },
+  signupLocationGroup: {
+    gap: spacing.sm,
+    position: "relative"
+  },
+  signupLocationOpen: {
+    zIndex: 30
+  },
+  signupCountryField: {
+    position: "relative"
+  },
+  detectedCountry: {
+    alignItems: "center",
+    backgroundColor: colors.surfaceMuted,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.sm,
+    minHeight: 54,
+    paddingHorizontal: spacing.md
+  },
+  detectedCountryCopy: {
+    flex: 1,
+    gap: 2
+  },
+  detectedCountryValue: {
+    ...typography.body,
+    color: colors.text
+  },
+  detectedCountryHint: {
+    ...typography.caption,
+    color: colors.textSoft,
+    fontSize: 10
+  },
+  detectedCountryOpen: {
+    borderColor: colors.primary
+  },
+  signupCountryArrow: {
+    color: colors.primary,
+    fontSize: 18
+  },
+  signupCountryMenu: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    left: 0,
+    overflow: "hidden",
+    position: "absolute",
+    right: 0,
+    shadowColor: colors.shadow,
+    shadowOffset: { height: 8, width: 0 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    top: 60,
+    zIndex: 40
+  },
+  signupCountrySearch: {
+    ...typography.body,
+    borderBottomColor: colors.border,
+    borderBottomWidth: 1,
+    color: colors.text,
+    minHeight: 44,
+    outlineStyle: "none",
+    paddingHorizontal: spacing.md
+  } as never,
+  signupCountryList: {
+    maxHeight: 190
+  },
+  signupCountryOption: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderBottomColor: colors.border,
+    borderBottomWidth: 1,
+    flexDirection: "row",
+    gap: spacing.sm,
+    minHeight: 42,
+    paddingHorizontal: spacing.md
+  },
+  signupCountryOptionSelected: {
+    backgroundColor: "#EFECFF"
+  },
+  signupCountryName: {
+    ...typography.caption,
+    color: colors.text,
+    flex: 1
+  },
+  signupCountryNameSelected: {
+    color: colors.primary,
+    fontWeight: "700"
+  },
+  signupCountryCode: {
+    ...typography.caption,
+    color: colors.textSoft
+  },
+  locationIcon: {
+    color: colors.textSoft,
+    fontSize: 19,
+    fontWeight: "700"
   },
   drawnIconBox: {
     alignItems: "center",

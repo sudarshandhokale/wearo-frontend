@@ -1,6 +1,6 @@
 # WEARO Frontend
 
-Expo React Native auth foundation for the WEARO consumer AI personal stylist app.
+Expo React Native frontend for the WEARO consumer AI personal stylist app. The current foundation includes authentication, resumable style onboarding, and wardrobe item management across native and web.
 
 ## Setup
 
@@ -23,9 +23,11 @@ For web auth, Rails CORS must allow the Expo web origin and expose the auth head
 expose: ["Authorization"]
 ```
 
-The app expects the Rails backend auth contract under `/api/v1`, including `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `DELETE /auth/logout`, and `GET/PATCH /me`.
+The app expects the Rails backend under `/api/v1`, including auth, `/metadata`, `/style_profile`, and `/clothing_items`.
 
 Successful register/login/refresh responses must include the JWT in the `Authorization` response header as `Bearer ...`.
+
+Camera/gallery uploads accept JPEG, PNG, or WebP files up to 10 MB. Uploaded items display the backend `processing` state immediately. Automatic AI analysis is intentionally not presented as complete because that begins in backend Milestone 4.
 
 ## Scripts
 
