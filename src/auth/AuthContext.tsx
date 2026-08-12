@@ -5,6 +5,7 @@ import type { ApiUser, AuthResponseData, LoginParams, RegisterParams, UpdateUser
 import { parseBearerToken } from "./authToken";
 import { tokenStorage } from "./tokenStorage";
 import { onUnauthorized } from "./sessionEvents";
+import type { PickedImage } from "../api/AppService";
 
 type AuthContextValue = {
   isInitializing: boolean;
@@ -13,6 +14,8 @@ type AuthContextValue = {
   login: (params: LoginParams) => Promise<void>;
   register: (params: RegisterParams) => Promise<void>;
   updateUser: (params: UpdateUserParams) => Promise<ApiUser>;
+  updateFullBodyImage: (image: PickedImage) => Promise<ApiUser>;
+  deleteFullBodyImage: () => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -112,6 +115,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } finally {
           setIsSubmitting(false);
         }
+      },
+      async updateFullBodyImage(image) {
+        const token = await tokenStorage.get();
+        if (!token) throw new Error("Your session has expired. Please sign in again.");
+        const response = await AuthService.updateFullBodyImage(image, token);
+        const updatedUser = extractUser(response.data); setUser(updatedUser); return updatedUser;
+      },
+      async deleteFullBodyImage() {
+        const token = await tokenStorage.get();
+        if (!token) throw new Error("Your session has expired. Please sign in again.");
+        await AuthService.deleteFullBodyImage(token);
+        setUser((current) => current ? { ...current, full_body_image: null } : current);
       },
       async logout() {
         const token = await tokenStorage.get();

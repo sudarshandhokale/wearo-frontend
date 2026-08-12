@@ -18,15 +18,17 @@ import { desktopNavItems, mobileNavItems } from "./types";
 export function AppShell() {
   const [activeScreen, setActiveScreen] = useState<AppScreen>("home");
   const [askRequest, setAskRequest] = useState<{ id: number; prompt: string; autoSend: boolean } | null>(null);
+  const [wardrobeItemRequest, setWardrobeItemRequest] = useState<{ id: number; clothingItemId: number | string } | null>(null);
   const { usesSidebar } = useResponsive();
 
   const navigate: Navigate = (screen, options) => {
     if (screen === "ask") {
       setAskRequest(options?.prompt ? { id: Date.now(), prompt: options.prompt, autoSend: options.autoSend === true } : null);
     }
+    if (screen === "wardrobe") setWardrobeItemRequest(options?.clothingItemId != null ? { id: Date.now(), clothingItemId: options.clothingItemId } : null);
     setActiveScreen(screen);
   };
-  const screen = useMemo(() => renderScreen(activeScreen, navigate, askRequest), [activeScreen, askRequest]);
+  const screen = useMemo(() => renderScreen(activeScreen, navigate, askRequest, wardrobeItemRequest), [activeScreen, askRequest, wardrobeItemRequest]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -46,10 +48,10 @@ export function AppShell() {
   );
 }
 
-function renderScreen(activeScreen: AppScreen, navigate: Navigate, askRequest: { id: number; prompt: string; autoSend: boolean } | null): ReactNode {
+function renderScreen(activeScreen: AppScreen, navigate: Navigate, askRequest: { id: number; prompt: string; autoSend: boolean } | null, wardrobeItemRequest: { id: number; clothingItemId: number | string } | null): ReactNode {
   switch (activeScreen) {
     case "wardrobe":
-      return <WardrobeScreen onNavigate={navigate} />;
+      return <WardrobeScreen initialItemRequest={wardrobeItemRequest} onNavigate={navigate} />;
     case "ask":
       return <AskWearoScreen initialRequest={askRequest} onNavigate={navigate} />;
     case "outfits":

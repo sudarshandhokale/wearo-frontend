@@ -4,13 +4,21 @@ import type {
   ClothingItemInput,
   ClothingItemListMeta,
   AiUsage,
+  ExternalContext,
   Outfit,
   OutfitFeedbackInput,
+  OutfitFeedback,
+  OutfitVisualization,
   PaginationMeta,
   RecommendationRequest,
+  StylingPlan,
+  StylingPlanInput,
   RecommendationResponse,
   StyleProfile,
-  StyleProfileInput
+  StyleProfileInput,
+  VisualizationMode,
+  WearHistory,
+  WearInput
 } from "./types";
 import { Platform } from "react-native";
 import { API_BASE_URL, RestService, type RestResult } from "./RestService";
@@ -141,10 +149,10 @@ export const AppService = {
   async reanalyzeClothingItem(id: ClothingItem["id"]) {
     return RestService.POST<ClothingItem>(`/api/v1/clothing_items/${id}/reanalyze`, undefined, await token());
   },
-  async recommendations(prompt: string) {
+  async recommendations(prompt: string, city?: string) {
     return RestService.POST<RecommendationResponse>(
       "/api/v1/stylist/recommendations",
-      { prompt },
+      { prompt, ...(city?.trim() ? { city: city.trim() } : {}) },
       await token()
     );
   },
@@ -170,6 +178,42 @@ export const AppService = {
   },
   async aiUsage() {
     return RestService.GET<AiUsage>("/api/v1/ai/usage", await token());
+  },
+  async wearOutfit(id: Outfit["id"], input: WearInput) {
+    return RestService.POST<WearHistory>(`/api/v1/outfits/${id}/wear`, { wear: input }, await token());
+  },
+  async feedbackOutfit(id: Outfit["id"], input: { reaction: "liked" | "disliked"; reason?: string | null; notes?: string | null }) {
+    return RestService.POST<OutfitFeedback>(`/api/v1/outfits/${id}/feedback`, { feedback: input }, await token());
+  },
+  async wearHistory(page = 1, perPage = 20) {
+    return RestService.GET<WearHistory[]>(`/api/v1/wear_history?page=${page}&per_page=${perPage}`, await token()) as Promise<Omit<RestResult<WearHistory[]>, "meta"> & { meta: PaginationMeta | null }>;
+  },
+  async context(city: string, startDate: string, endDate: string) {
+    const params = new URLSearchParams({ city, start_date: startDate, end_date: endDate });
+    return RestService.GET<ExternalContext>(`/api/v1/context?${params.toString()}`, await token());
+  },
+  async stylingPlans(page = 1, perPage = 20) {
+    return RestService.GET<StylingPlan[]>(`/api/v1/styling_plans?page=${page}&per_page=${perPage}`, await token()) as Promise<Omit<RestResult<StylingPlan[]>, "meta"> & { meta: PaginationMeta | null }>;
+  },
+  async stylingPlan(id: StylingPlan["id"]) {
+    return RestService.GET<StylingPlan>(`/api/v1/styling_plans/${id}`, await token());
+  },
+  async createStylingPlan(input: StylingPlanInput) {
+    return RestService.POST<StylingPlan>("/api/v1/styling_plans", { styling_plan: input }, await token());
+  },
+  async visualizations(outfitId: Outfit["id"]) {
+    return RestService.GET<OutfitVisualization[]>(`/api/v1/outfits/${outfitId}/visualizations`, await token());
+  },
+  async visualization(outfitId: Outfit["id"], id: OutfitVisualization["id"]) {
+    return RestService.GET<OutfitVisualization>(`/api/v1/outfits/${outfitId}/visualizations/${id}`, await token());
+  },
+  async createVisualization(outfitId: Outfit["id"], mode: VisualizationMode, referenceImage?: PickedImage | null) {
+    if (!referenceImage) return RestService.POST<OutfitVisualization>(`/api/v1/outfits/${outfitId}/visualizations`, { visualization: { mode } }, await token());
+    const form = new FormData();
+    form.append("visualization[mode]", mode);
+    if (Platform.OS === "web") { const blob = await fetch(referenceImage.uri).then((response) => response.blob()); form.append("visualization[reference_image]", blob, referenceImage.name); }
+    else form.append("visualization[reference_image]", { uri: referenceImage.uri, name: referenceImage.name, type: referenceImage.mimeType } as unknown as Blob);
+    return RestService.POST_FORM<OutfitVisualization>(`/api/v1/outfits/${outfitId}/visualizations`, form, await token());
   }
 };
 

@@ -3,6 +3,7 @@ export type AppScreen = "home" | "wardrobe" | "ask" | "outfits" | "history" | "p
 export type NavigationOptions = {
   prompt?: string;
   autoSend?: boolean;
+  clothingItemId?: number | string;
 };
 
 export type Navigate = (screen: AppScreen, options?: NavigationOptions) => void;

@@ -450,7 +450,7 @@ function styleImageFor(preference: string, styleKey: string, index: number) {
   return index % 2 === 0 ? womenswearStyleImages[styleKey] : menswearStyleImages[styleKey];
 }
 function messageFor(error: unknown) { return error instanceof Error ? error.message : "Something went wrong. Please try again."; }
-function emptyItem() { return { name: "", garment_type: "", category: "", subcategory: "", primary_color: "", secondary_colors: [], pattern: "", material: "", season_tags: [], occasion_tags: [], style_tags: [], cultural_tags: [], formality_score: "" }; }
+function emptyItem() { return { name: "", garment_type: "", category: "", subcategory: "", primary_color: "", secondary_colors: [], pattern: "", material: "", fit: "", season_tags: [], occasion_tags: [], style_tags: [], cultural_tags: [], formality_score: "" }; }
 function colorValue(key: string) { return ({ black: "#242424", white: "#FFFFFF", gray: "#A4A4A4", navy: "#202A55", blue: "#4479C4", brown: "#87654A", beige: "#DED0B8", green: "#5B7F63", red: "#B94A55", pink: "#D99CB3", purple: "#7761B5", orange: "#D47D42", yellow: "#D6B745", neon: "#B6F23A" } as Record<string, string>)[key] || "#D8D4E0"; }
 
 const styles = StyleSheet.create({

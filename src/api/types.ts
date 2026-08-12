@@ -22,7 +22,10 @@ export type ApiUser = {
   timezone?: string | null;
   country_code?: string | null;
   preferred_city?: string | null;
+  full_body_image?: ApiImage | null;
 };
+
+export type ApiImage = { signed_id: string; url: string };
 
 export type AuthResponseData = {
   user: ApiUser;
@@ -72,6 +75,7 @@ export type AppMetadata = {
   };
   clothing_items: {
     categories: ClothingCategory[];
+    fits: MetadataOption[];
     statuses: MetadataOption[];
   };
   outfits: {
@@ -120,6 +124,7 @@ export type ClothingItem = {
   occasion_tags: string[];
   style_tags: string[];
   cultural_tags: string[];
+  fit: string | null;
   formality_score: number | null;
   status: ClothingItemStatus;
   ai_analyzed_at: string | null;
@@ -141,6 +146,7 @@ export type ClothingItemInput = {
   occasion_tags: string[];
   style_tags: string[];
   cultural_tags: string[];
+  fit: string;
   formality_score: string;
 };
 
@@ -188,8 +194,38 @@ export type RecommendationResponse = {
   recommendation: RecommendationRequest;
   context: Record<string, unknown>;
   outfits: Outfit[];
-  suggestions: unknown[];
+  suggestions: ContextualSuggestion[];
 };
+
+export type ContextualSuggestion = {
+  key: string;
+  type: "weather" | "styling" | "wardrobe";
+  priority: "essential" | "recommended" | "optional";
+  action: "bring" | "use_owned_item" | "add_to_wardrobe" | "consider";
+  role: string | null;
+  clothing_item_id: number | string | null;
+  suggested_subcategories: string[];
+  message: string;
+  question: string | null;
+};
+
+export type WearInput = { worn_on: string; occasion?: string | null; context?: Record<string, unknown> };
+export type WearHistory = { id: number | string; outfit_id: number | string; worn_on: string; occasion: string | null; context: Record<string, unknown>; created_at: string };
+export type FeedbackReaction = "liked" | "disliked";
+export type DislikeReason = "too_formal" | "too_casual" | "dont_like_colors" | "recently_worn" | "not_comfortable" | "not_my_style" | "other";
+export type OutfitFeedback = { id: number | string; outfit_id: number | string; reaction: FeedbackReaction; reason: DislikeReason | null; notes: string | null; created_at: string; updated_at: string };
+
+export type WeatherDay = { date: string; condition?: string; temperature_max?: number; temperature_min?: number; precipitation_probability?: number; [key: string]: unknown };
+export type ExternalContext = { city: string | null; country_code: string | null; weather: WeatherDay[] };
+
+export type StylingPlanType = "week" | "vacation";
+export type StylingPlanInput = { plan_type: StylingPlanType; city: string; start_date: string; end_date: string; prompt: string };
+export type StylingPlanEntry = { id: number | string; planned_for: string; context: Record<string, unknown>; weather_context: Record<string, unknown>; events_context: Record<string, unknown>; outfit: Outfit };
+export type PackingItem = { clothing_item_id?: number | string; name?: string; wear_count: number; [key: string]: unknown };
+export type StylingPlan = { id: number | string; plan_type: StylingPlanType; status: "processing" | "completed" | "failed"; city: string | null; country_code: string | null; start_date: string; end_date: string; prompt: string | null; weather_context: Record<string, unknown>; packing_summary: { days?: number; unique_item_count?: number; items?: PackingItem[]; gaps?: unknown[]; [key: string]: unknown }; failure_code: string | null; completed_at: string | null; entries: StylingPlanEntry[]; created_at: string; updated_at: string };
+
+export type VisualizationMode = "flat_lay" | "try_on";
+export type OutfitVisualization = { id: number | string; outfit_id: number | string; mode: VisualizationMode; status: "queued" | "processing" | "ready" | "failed"; provider: string | null; model: string | null; metadata: Record<string, unknown>; failure_code: string | null; image: ApiImage | null; completed_at: string | null; created_at: string; updated_at: string };
 
 export type OutfitStatus = "recommended" | "saved" | "worn" | "dismissed";
 
