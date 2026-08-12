@@ -5,6 +5,7 @@ import { AppService, PickedImage, resolveImageUrl } from "../api/AppService";
 import type { ClothingItem, ClothingItemInput, MetadataOption } from "../api/types";
 import { useAppData } from "../context/AppDataContext";
 import { Button } from "../components/Button";
+import { AuthenticatedImage } from "../components/AuthenticatedImage";
 import { PhotoGuide } from "../components/PhotoGuide";
 import { ScreenContainer } from "../components/ScreenContainer";
 import { useResponsive } from "../hooks/useResponsive";
@@ -238,7 +239,7 @@ function ItemDetail(props: { item: ClothingItem; metadata: ReturnType<typeof use
   return <ScreenContainer>
     <View style={styles.subHeader}><BackButton onPress={props.onBack} /><View style={styles.headerCopy}><Text style={styles.title}>{props.item.name || "Untitled item"}</Text><StatusBadge status={props.item.status} statuses={props.metadata?.clothing_items.statuses || []} /></View></View>
     <View style={styles.detailLayout}>
-      <View style={styles.detailImageFrame}>{url ? <Image source={{ uri: url }} style={styles.detailImage} /> : <View style={styles.imagePlaceholder}><Text style={styles.imagePlaceholderText}>No image</Text></View>}</View>
+      <View style={styles.detailImageFrame}>{url ? <AuthenticatedImage url={props.item.image?.url} style={styles.detailImage} /> : <View style={styles.imagePlaceholder}><Text style={styles.imagePlaceholderText}>No image</Text></View>}</View>
       <View style={styles.detailCard}>
         <Text style={styles.detailSectionTitle}>Item details</Text>
         <View style={styles.detailGrid}><Detail label="Garment type" value={props.item.garment_type} /><Detail label="Category" value={labelFor(props.metadata?.clothing_items.categories || [], props.item.category)} /><Detail label="Subcategory" value={subcategoryLabel(props.metadata?.clothing_items.categories || [], props.item.subcategory)} /><Detail label="Color" value={props.item.primary_color} /><Detail label="Pattern" value={props.item.pattern} /><Detail label="Material" value={props.item.material} /><Detail label="Fit" value={labelFor(props.metadata?.clothing_items.fits || [], props.item.fit)} /><Detail label="Formality" value={props.item.formality_score ? `${props.item.formality_score}/10` : null} /><Detail label="Cultural tags" value={props.item.cultural_tags.map(humanize).join(", ")} /></View>
@@ -253,7 +254,7 @@ function ItemDetail(props: { item: ClothingItem; metadata: ReturnType<typeof use
 
 function ItemCard({ item, columns, statuses, onPress }: { item: ClothingItem; columns: number; statuses: MetadataOption[]; onPress: () => void }) {
   const url = resolveImageUrl(item.image?.url);
-  return <Pressable onPress={onPress} style={[styles.itemCard, { width: columns <= 2 ? "47%" : `${Math.floor(100 / columns) - 2}%` }]}>{url ? <Image source={{ uri: url }} style={styles.itemImage} /> : <View style={styles.itemImagePlaceholder}><Text style={styles.itemImagePlaceholderText}>W</Text></View>}<View style={styles.itemCopy}><StatusBadge compact status={item.status} statuses={statuses} /><Text numberOfLines={1} style={styles.itemName}>{item.name || item.garment_type || item.subcategory || "Clothing item"}</Text><Text numberOfLines={1} style={styles.itemMeta}>{[item.garment_type, item.primary_color, item.category].filter(Boolean).join(" · ") || "Details pending"}</Text></View></Pressable>;
+  return <Pressable onPress={onPress} style={[styles.itemCard, { width: columns <= 2 ? "47%" : `${Math.floor(100 / columns) - 2}%` }]}>{url ? <AuthenticatedImage url={item.image?.url} style={styles.itemImage} /> : <View style={styles.itemImagePlaceholder}><Text style={styles.itemImagePlaceholderText}>W</Text></View>}<View style={styles.itemCopy}><StatusBadge compact status={item.status} statuses={statuses} /><Text numberOfLines={1} style={styles.itemName}>{item.name || item.garment_type || item.subcategory || "Clothing item"}</Text><Text numberOfLines={1} style={styles.itemMeta}>{[item.garment_type, item.primary_color, item.category].filter(Boolean).join(" · ") || "Details pending"}</Text></View></Pressable>;
 }
 
 function EmptyWardrobe({ onAdd }: { onAdd: () => void }) { return <View style={styles.emptyState}><View style={styles.emptyMark}><Text style={styles.emptyMarkText}>W</Text></View><Text style={styles.emptyTitle}>Build your wardrobe</Text><Text style={styles.emptyText}>Add a few pieces and WEARO will have the ingredients for your first outfit.</Text><Button onPress={onAdd} style={styles.emptyButton} title="Add your first item" /></View>; }

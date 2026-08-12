@@ -4,13 +4,15 @@ export class ApiError extends Error {
   code: number;
   fieldErrors: ApiFieldErrors;
   details: unknown;
+  retryAfter: number | null;
 
-  constructor(code: number, message: string, fieldErrors: ApiFieldErrors = {}, details?: unknown) {
+  constructor(code: number, message: string, fieldErrors: ApiFieldErrors = {}, details?: unknown, retryAfter: number | null = null) {
     super(message);
     this.name = "ApiError";
     this.code = code;
     this.fieldErrors = fieldErrors;
     this.details = details;
+    this.retryAfter = retryAfter;
   }
 }
 

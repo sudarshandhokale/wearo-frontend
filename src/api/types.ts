@@ -23,6 +23,15 @@ export type ApiUser = {
   country_code?: string | null;
   preferred_city?: string | null;
   full_body_image?: ApiImage | null;
+  consents?: UserConsents;
+};
+
+export type UserConsents = {
+  terms?: { accepted_at: string | null; version: string | null } | null;
+  privacy?: { accepted_at: string | null; version: string | null } | null;
+  ai_processing?: { accepted_at: string | null } | null;
+  adult_confirmed_at?: string | null;
+  full_body_image?: { accepted_at: string | null } | null;
 };
 
 export type ApiImage = { signed_id: string; url: string };
@@ -40,7 +49,14 @@ export type RegisterParams = {
   timezone: string;
   country_code: string;
   preferred_city: string;
+  accept_terms: boolean;
+  accept_privacy: boolean;
+  accept_ai_processing: boolean;
+  confirm_adult: boolean;
 };
+
+export type RegistrationResult = { message: string };
+export type ConsentInput = Pick<RegisterParams, "accept_terms" | "accept_privacy" | "accept_ai_processing" | "confirm_adult">;
 
 export type LoginParams = {
   email: string;
@@ -82,6 +98,13 @@ export type AppMetadata = {
     roles: MetadataOption[];
     statuses: MetadataOption[];
     base_compositions?: unknown[];
+  };
+  legal: {
+    minimum_age: number;
+    terms: { version: string; url: string };
+    privacy: { version: string; url: string };
+    ai_processing_required: boolean;
+    full_body_image_consent_required: boolean;
   };
 };
 

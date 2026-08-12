@@ -41,6 +41,10 @@ export class RestService {
     return this.request<T>(path, { method: "DELETE", token });
   }
 
+  static DELETE_WITH_BODY<T>(path: string, body: unknown, token?: string | null) {
+    return this.request<T>(path, { method: "DELETE", body, token });
+  }
+
   static POST_FORM<T>(path: string, body: FormData, token?: string | null) {
     return this.request<T>(path, { method: "POST", body, token });
   }
@@ -102,7 +106,16 @@ export class RestService {
       response.status,
       message,
       fieldErrors,
-      payload.success ? undefined : payload.error.details
+      payload.success ? undefined : payload.error.details,
+      retryAfterSeconds(response.headers.get("Retry-After"))
     );
   }
+}
+
+function retryAfterSeconds(value: string | null) {
+  if (!value) return null;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds);
+  const date = new Date(value).getTime();
+  return Number.isNaN(date) ? null : Math.max(0, Math.ceil((date - Date.now()) / 1000));
 }

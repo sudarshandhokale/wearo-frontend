@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { Bookmark, Check, ChevronLeft } from "lucide-react-native";
 
 import { AppService, resolveImageUrl } from "../api/AppService";
 import type { Outfit } from "../api/types";
 import { Button } from "../components/Button";
+import { AuthenticatedImage } from "../components/AuthenticatedImage";
 import { OutfitDetail } from "../components/OutfitDetail";
 import { ScreenContainer } from "../components/ScreenContainer";
 import { StylingPlans } from "../components/StylingPlans";
@@ -49,7 +50,7 @@ export function OutfitsScreen({ onNavigate }: { onNavigate: (screen: AppScreen) 
   </ScreenContainer>;
 }
 
-function OutfitCard({ index, outfit, onPress }: { index: number; outfit: Outfit; onPress: () => void }) { const images = outfit.items.slice(0, 3); const context = outfit.occasion || textContext(outfit.context, "occasion") || textContext(outfit.context, "activity"); return <Pressable onPress={onPress} style={({ pressed }) => [styles.card, pressed && styles.pressed]}><View style={styles.images}>{images.map((item) => { const url = resolveImageUrl(item.clothing_item.image?.url); return url ? <Image key={item.id} source={{ uri: url }} style={styles.image} /> : <View key={item.id} style={styles.placeholder}><Text style={styles.placeholderText}>W</Text></View>; })}</View><View style={styles.cardCopy}><View style={styles.cardTop}><Text numberOfLines={1} style={styles.cardTitle}>Look {index + 1}</Text>{outfit.status === "saved" ? <Bookmark color={colors.primary} fill={colors.primary} size={17} /> : outfit.status === "worn" ? <Check color={colors.success} size={18} /> : null}</View>{context ? <Text style={styles.cardContext}>{humanize(context)}</Text> : null}<Text style={styles.meta}>{[humanize(outfit.status), outfit.recommendation_score != null ? `${Math.round(outfit.recommendation_score)}% match` : null].filter(Boolean).join(" · ")}</Text></View></Pressable>; }
+function OutfitCard({ index, outfit, onPress }: { index: number; outfit: Outfit; onPress: () => void }) { const images = outfit.items.slice(0, 3); const context = outfit.occasion || textContext(outfit.context, "occasion") || textContext(outfit.context, "activity"); return <Pressable onPress={onPress} style={({ pressed }) => [styles.card, pressed && styles.pressed]}><View style={styles.images}>{images.map((item) => { const url = resolveImageUrl(item.clothing_item.image?.url); return url ? <AuthenticatedImage key={item.id} url={item.clothing_item.image?.url} style={styles.image} /> : <View key={item.id} style={styles.placeholder}><Text style={styles.placeholderText}>W</Text></View>; })}</View><View style={styles.cardCopy}><View style={styles.cardTop}><Text numberOfLines={1} style={styles.cardTitle}>Look {index + 1}</Text>{outfit.status === "saved" ? <Bookmark color={colors.primary} fill={colors.primary} size={17} /> : outfit.status === "worn" ? <Check color={colors.success} size={18} /> : null}</View>{context ? <Text style={styles.cardContext}>{humanize(context)}</Text> : null}<Text style={styles.meta}>{[humanize(outfit.status), outfit.recommendation_score != null ? `${Math.round(outfit.recommendation_score)}% match` : null].filter(Boolean).join(" · ")}</Text></View></Pressable>; }
 function Loading() { return <View style={styles.loading}><ActivityIndicator color={colors.primary} /><Text style={styles.subtitle}>Loading outfits</Text></View>; }
 function ErrorBanner({ message }: { message: string }) { return <View style={styles.error}><Text style={styles.errorText}>{message}</Text></View>; }
 function humanize(value: string) { return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()); }

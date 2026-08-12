@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Send, Sparkles } from "lucide-react-native";
 
 import { ApiError } from "../api/ApiError";
@@ -7,6 +7,7 @@ import { AppService, resolveImageUrl } from "../api/AppService";
 import type { ContextualSuggestion, MetadataOption, Outfit, RecommendationErrorDetails, RecommendationRequest } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { Button } from "../components/Button";
+import { AuthenticatedImage } from "../components/AuthenticatedImage";
 import { OutfitDetail } from "../components/OutfitDetail";
 import { ScreenContainer } from "../components/ScreenContainer";
 import { WearoMark } from "../components/WearoLogo";
@@ -178,7 +179,7 @@ function OutfitGallery({ outfit, roles, large = false }: { outfit: Outfit; roles
         const url = resolveImageUrl(item.clothing_item.image?.url);
         return (
           <View key={item.id} style={styles.galleryItem}>
-            {url ? <Image resizeMode="cover" source={{ uri: url }} style={styles.clothingImage} /> : <View style={styles.imagePlaceholder}><Text style={styles.placeholderMark}>W</Text></View>}
+            {url ? <AuthenticatedImage resizeMode="cover" url={item.clothing_item.image?.url} style={styles.clothingImage} /> : <View style={styles.imagePlaceholder}><Text style={styles.placeholderMark}>W</Text></View>}
             <View style={styles.itemCopy}>
               <Text style={styles.role}>{labelFor(roles, item.role)}</Text>
               <Text numberOfLines={1} style={styles.itemName}>{item.clothing_item.name || item.clothing_item.subcategory || "Clothing item"}</Text>

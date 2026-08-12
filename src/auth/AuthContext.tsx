@@ -1,7 +1,7 @@
 import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from "react";
 
 import { AuthService } from "../api/AuthService";
-import type { ApiUser, AuthResponseData, LoginParams, RegisterParams, UpdateUserParams } from "../api/types";
+import type { ApiUser, AuthResponseData, ConsentInput, LoginParams, RegisterParams, RegistrationResult, UpdateUserParams } from "../api/types";
 import { parseBearerToken } from "./authToken";
 import { tokenStorage } from "./tokenStorage";
 import { onUnauthorized } from "./sessionEvents";
@@ -12,7 +12,12 @@ type AuthContextValue = {
   isSubmitting: boolean;
   user: ApiUser | null;
   login: (params: LoginParams) => Promise<void>;
-  register: (params: RegisterParams) => Promise<void>;
+  register: (params: RegisterParams) => Promise<RegistrationResult>;
+  verifyConfirmation: (token: string) => Promise<void>;
+  updateConsents: (input: ConsentInput) => Promise<ApiUser>;
+  deleteAccount: (password: string) => Promise<void>;
+  exportAccount: () => Promise<unknown>;
+  clearSession: () => Promise<void>;
   updateUser: (params: UpdateUserParams) => Promise<ApiUser>;
   updateFullBodyImage: (image: PickedImage) => Promise<ApiUser>;
   deleteFullBodyImage: () => Promise<void>;
@@ -97,12 +102,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsSubmitting(true);
         try {
           const response = await AuthService.register(params);
-          await persistAuth(response.authorizationHeader);
-          setUser(extractUser(response.data));
+          return response.data;
         } finally {
           setIsSubmitting(false);
         }
       },
+      async verifyConfirmation(tokenValue) {
+        setIsSubmitting(true);
+        try { const response = await AuthService.verifyConfirmation(tokenValue); await persistAuth(response.authorizationHeader); setUser(extractUser(response.data)); }
+        finally { setIsSubmitting(false); }
+      },
+      async updateConsents(input) {
+        const tokenValue = await tokenStorage.get();
+        if (!tokenValue) throw new Error("Your session has expired. Please sign in again.");
+        setIsSubmitting(true);
+        try { const response = await AuthService.updateConsents(input, tokenValue); const updatedUser = extractUser(response.data); setUser(updatedUser); return updatedUser; }
+        finally { setIsSubmitting(false); }
+      },
+      async deleteAccount(password) {
+        const tokenValue = await tokenStorage.get();
+        if (!tokenValue) throw new Error("Your session has expired. Please sign in again.");
+        await AuthService.deleteAccount(password, tokenValue); await tokenStorage.clear(); setUser(null);
+      },
+      async exportAccount() { const tokenValue = await tokenStorage.get(); if (!tokenValue) throw new Error("Your session has expired. Please sign in again."); return AuthService.exportAccount(tokenValue); },
+      async clearSession() { await tokenStorage.clear(); setUser(null); },
       async updateUser(params) {
         const token = await tokenStorage.get();
         if (!token) throw new Error("Your session has expired. Please sign in again.");

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Bookmark, Check, ImageIcon, ThumbsDown, ThumbsUp, X } from "lucide-react-native";
 
 import { AppService, resolveImageUrl } from "../api/AppService";
@@ -7,6 +7,7 @@ import type { DislikeReason, FeedbackReaction, MetadataOption, Outfit, OutfitSta
 import { colors, radius, spacing, typography } from "../theme";
 import { pickWardrobeImage } from "../utils/imagePicker";
 import { Button } from "./Button";
+import { AuthenticatedImage } from "./AuthenticatedImage";
 
 const dislikeReasons: Array<{ key: DislikeReason; label: string }> = [
   { key: "too_formal", label: "Too formal" }, { key: "too_casual", label: "Too casual" },
@@ -80,7 +81,7 @@ export function OutfitDetail({ initialOutfit, roles, onChange }: { initialOutfit
   return <View style={styles.layout}>
     <View style={styles.gallery}>{[...outfit.items].sort((a, b) => a.position - b.position).map((item) => {
       const url = resolveImageUrl(item.clothing_item.image?.url);
-      return <View key={item.id} style={styles.item}>{url ? <Image resizeMode="cover" source={{ uri: url }} style={styles.image} /> : <View style={styles.placeholder}><Text style={styles.placeholderText}>W</Text></View>}<View style={styles.itemCopy}><Text style={styles.role}>{labelFor(roles, item.role)}</Text><Text numberOfLines={1} style={styles.itemName}>{item.clothing_item.name || item.clothing_item.subcategory || "Clothing item"}</Text></View></View>;
+      return <View key={item.id} style={styles.item}>{url ? <AuthenticatedImage resizeMode="cover" url={item.clothing_item.image?.url} style={styles.image} /> : <View style={styles.placeholder}><Text style={styles.placeholderText}>W</Text></View>}<View style={styles.itemCopy}><Text style={styles.role}>{labelFor(roles, item.role)}</Text><Text numberOfLines={1} style={styles.itemName}>{item.clothing_item.name || item.clothing_item.subcategory || "Clothing item"}</Text></View></View>;
     })}</View>
     <View style={styles.panel}>
       <View style={styles.badges}><Badge text={humanize(outfit.status)} />{outfit.recommendation_score != null ? <Badge text={`${Math.round(outfit.recommendation_score)}% match`} /> : null}</View>
@@ -92,7 +93,7 @@ export function OutfitDetail({ initialOutfit, roles, onChange }: { initialOutfit
 
       <Section title="Help WEARO learn"><View style={styles.actions}><StatusAction active={reaction === "liked"} icon={<ThumbsUp color={reaction === "liked" ? colors.primary : colors.textMuted} size={18} />} label="Liked" onPress={() => { setReaction("liked"); setReason(null); }} /><StatusAction active={reaction === "disliked"} icon={<ThumbsDown color={reaction === "disliked" ? colors.primary : colors.textMuted} size={18} />} label="Disliked" onPress={() => setReaction("disliked")} /></View>{reaction === "disliked" ? <View style={styles.chips}>{dislikeReasons.map((option) => <Pressable key={option.key} onPress={() => setReason(option.key)} style={[styles.chip, reason === option.key && styles.chipActive]}><Text style={[styles.chipText, reason === option.key && styles.chipTextActive]}>{option.label}</Text></Pressable>)}</View> : null}<TextInput maxLength={500} multiline onChangeText={setNote} placeholder="Optional notes" placeholderTextColor={colors.textSoft} style={styles.note} value={note} /><Text style={styles.count}>{note.length}/500</Text><Button loading={isSaving} onPress={() => void saveFeedback()} title="Save feedback" variant="secondary" /></Section>
 
-      <Section title="Visualize this look"><View style={styles.actions}><StatusAction active={mode === "flat_lay"} icon={<ImageIcon color={mode === "flat_lay" ? colors.primary : colors.textMuted} size={18} />} label="Flat lay" onPress={() => setMode("flat_lay")} /><StatusAction active={mode === "try_on"} icon={<Check color={mode === "try_on" ? colors.primary : colors.textMuted} size={18} />} label="Try on" onPress={() => setMode("try_on")} /></View><Text style={styles.hint}>{mode === "try_on" ? "Uses the image you choose, or your saved full-body profile image." : "Creates a clean image of the complete outfit."}</Text><Button loading={isSaving || visualization?.status === "queued" || visualization?.status === "processing"} onPress={() => void createVisualization()} title={visualization?.status === "queued" || visualization?.status === "processing" ? "Creating visualization" : "Create visualization"} variant="secondary" />{visualization?.status === "ready" && visualization.image?.url ? <Image resizeMode="contain" source={{ uri: resolveImageUrl(visualization.image.url) || "" }} style={styles.visualization} /> : null}{visualization?.status === "failed" ? <Text style={styles.errorText}>The visualization could not be created. Please try again.</Text> : null}</Section>
+      <Section title="Visualize this look"><View style={styles.actions}><StatusAction active={mode === "flat_lay"} icon={<ImageIcon color={mode === "flat_lay" ? colors.primary : colors.textMuted} size={18} />} label="Flat lay" onPress={() => setMode("flat_lay")} /><StatusAction active={mode === "try_on"} icon={<Check color={mode === "try_on" ? colors.primary : colors.textMuted} size={18} />} label="Try on" onPress={() => setMode("try_on")} /></View><Text style={styles.hint}>AI generates a new visualization from your outfit images. Results may be inaccurate and should be treated as styling inspiration.</Text><Text style={styles.hint}>{mode === "try_on" ? "Uses the image you choose, or your saved full-body profile image." : "Creates a clean image of the complete outfit."}</Text><Button loading={isSaving || visualization?.status === "queued" || visualization?.status === "processing"} onPress={() => void createVisualization()} title={visualization?.status === "queued" || visualization?.status === "processing" ? "Creating visualization" : "Create visualization"} variant="secondary" />{visualization?.status === "ready" && visualization.image?.url ? <AuthenticatedImage resizeMode="contain" url={visualization.image.url} style={styles.visualization} /> : null}{visualization?.status === "failed" ? <Text style={styles.errorText}>The visualization could not be created. Please try again.</Text> : null}</Section>
       {error ? <View style={styles.error}><Text style={styles.errorText}>{error}</Text></View> : null}
     </View>
   </View>;
