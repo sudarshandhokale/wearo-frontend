@@ -6,6 +6,7 @@ import { useAuth } from "../auth/AuthContext";
 import { Button } from "../components/Button";
 import { AuthenticatedImage } from "../components/AuthenticatedImage";
 import { ScreenContainer } from "../components/ScreenContainer";
+import { MAX_PREFERRED_STYLES } from "../constants/preferences";
 import { useAppData } from "../context/AppDataContext";
 import { colors, radius, spacing, typography } from "../theme";
 import { deviceTimezone, inferDeviceCountryCode } from "../utils/deviceLocation";
@@ -190,9 +191,9 @@ function StyleProfileEditor({ metadata, onCancel, onSave, profile }: { metadata:
       <View style={styles.row}><View style={styles.field}><Text style={styles.label}>Height (cm)</Text><TextInput keyboardType="number-pad" onChangeText={(value) => setHeight(value.replace(/\D/g, "").slice(0, 3))} placeholder="175" placeholderTextColor={colors.textSoft} style={styles.input} value={height} /></View><EditChoiceGroup compact label="Build" options={builds} selected={[build]} onSelect={setBuild} /></View>
       <EditChoiceGroup label="Age range" options={ages} selected={[age]} onSelect={setAge} />
     </EditorSection>
-    <EditorSection number="02" subtitle="Choose up to four directions that feel like you." title="Style direction">
-      <View style={styles.sectionControlRow}><PreferenceToggle label="Open to any style" onPress={() => { setAnyStyle((value) => !value); setStylesSelected([]); }} selected={anyStyle} />{!anyStyle ? <Text style={styles.selectionCount}>{stylesSelected.length}/4 selected</Text> : null}</View>
-      {!anyStyle ? <EditChoiceGroup label="Preferred styles" multiple options={styleOptions} selected={stylesSelected} onSelect={(key) => setStylesSelected((current) => current.includes(key) ? current.filter((value) => value !== key) : current.length < 4 ? [...current, key] : current)} /> : <Text style={styles.sectionEmpty}>WEARO can recommend across every style.</Text>}
+    <EditorSection number="02" subtitle={`Choose up to ${MAX_PREFERRED_STYLES} directions that feel like you.`} title="Style direction">
+      <View style={styles.sectionControlRow}><PreferenceToggle label="Open to any style" onPress={() => { setAnyStyle((value) => !value); setStylesSelected([]); }} selected={anyStyle} />{!anyStyle ? <Text style={styles.selectionCount}>{stylesSelected.length}/{MAX_PREFERRED_STYLES} selected</Text> : null}</View>
+      {!anyStyle ? <EditChoiceGroup label="Preferred styles" multiple options={styleOptions} selected={stylesSelected} onSelect={(key) => setStylesSelected((current) => current.includes(key) ? current.filter((value) => value !== key) : current.length < MAX_PREFERRED_STYLES ? [...current, key] : current)} /> : <Text style={styles.sectionEmpty}>WEARO can recommend across every style.</Text>}
     </EditorSection>
     <EditorSection number="03" subtitle="Select colors you enjoy and any you prefer not to wear." title="Color palette">
       <PreferenceToggle label="Open to any color" onPress={() => { setAnyColor((value) => !value); setColorsSelected([]); }} selected={anyColor} />

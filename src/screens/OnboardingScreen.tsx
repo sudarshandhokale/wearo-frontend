@@ -22,6 +22,7 @@ import { Button } from "../components/Button";
 import { AuthenticatedImage } from "../components/AuthenticatedImage";
 import { PhotoGuide } from "../components/PhotoGuide";
 import { WearoMark, WearoMobileLogo, WearoWebLogo } from "../components/WearoLogo";
+import { MAX_PREFERRED_STYLES } from "../constants/preferences";
 import { useResponsive } from "../hooks/useResponsive";
 import { colors, radius, shadows, spacing, typography } from "../theme";
 import { pickWardrobeImages } from "../utils/imagePicker";
@@ -54,7 +55,11 @@ const menswearStyleImages: Record<string, ImageSourcePropType> = {
   business_casual: require("../../assets/styles/menswear/business-casual.png"),
   bohemian: require("../../assets/styles/menswear/bohemian.png"),
   edgy: require("../../assets/styles/menswear/edgy.png"),
-  preppy: require("../../assets/styles/menswear/preppy.png")
+  preppy: require("../../assets/styles/menswear/preppy.png"),
+  traditional_indian: require("../../assets/styles/menswear/traditional-indian.png"),
+  ethnic: require("../../assets/styles/menswear/ethnic.png"),
+  indo_western: require("../../assets/styles/menswear/indo-western.png"),
+  festive: require("../../assets/styles/menswear/festive.png")
 };
 const womenswearStyleImages: Record<string, ImageSourcePropType> = {
   minimal: require("../../assets/styles/womenswear/minimal.png"),
@@ -65,12 +70,16 @@ const womenswearStyleImages: Record<string, ImageSourcePropType> = {
   business_casual: require("../../assets/styles/womenswear/business-casual.png"),
   bohemian: require("../../assets/styles/womenswear/bohemian.png"),
   edgy: require("../../assets/styles/womenswear/edgy.png"),
-  preppy: require("../../assets/styles/womenswear/preppy.png")
+  preppy: require("../../assets/styles/womenswear/preppy.png"),
+  traditional_indian: require("../../assets/styles/womenswear/traditional-indian.png"),
+  ethnic: require("../../assets/styles/womenswear/ethnic.png"),
+  indo_western: require("../../assets/styles/womenswear/indo-western.png"),
+  festive: require("../../assets/styles/womenswear/festive.png")
 };
 
 export function OnboardingScreen() {
   const { metadata, saveStyleProfile, styleProfile } = useAppData();
-  const { usesSidebar } = useResponsive();
+  const { height: viewportHeight, usesSidebar } = useResponsive();
   const saved = styleProfile?.additional_preferences || {};
   const [step, setStep] = useState(Number(saved.onboarding_step) || 0);
   const [preferredStyles, setPreferredStyles] = useState(styleProfile?.preferred_styles || []);
@@ -206,64 +215,72 @@ export function OnboardingScreen() {
         <View style={styles.scrim} />
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.flex}>
           <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-            <View style={[styles.shell, usesSidebar && styles.desktopShell]}>
+            <View style={[styles.shell, usesSidebar && styles.desktopShell, usesSidebar && { height: Math.max(680, viewportHeight - spacing.xxxl) }]}>
               {usesSidebar ? <OnboardingStory /> : null}
               <View style={[styles.card, usesSidebar && styles.desktopCard]}>
-                {!usesSidebar ? <WearoMobileLogo compact /> : null}
-                {step > 0 ? <Progress step={step} /> : null}
-                {step === 0 ? (
-                  <Welcome onContinue={() => void saveAndGo(1)} onSkip={() => void deferOnboarding()} />
-                ) : null}
-                {step === 1 ? (
-                  <AboutYou
-                    ageRange={ageRange}
-                    build={build}
-                    genderPreference={genderPreference}
-                    height={height}
-                    onAgeRange={setAgeRange}
-                    onBuild={setBuild}
-                    onGenderPreference={setGenderPreference}
-                    onHeight={(value) => setHeight(value.replace(/\D/g, "").slice(0, 3))}
-                    onContinue={() => void saveAndGo(2)}
-                  />
-                ) : null}
-                {step === 2 ? (
-                  <StyleStep
-                    genderPreference={genderPreference}
-                    options={metadata?.style_profile.preferred_styles || []}
-                    selected={preferredStyles}
-                    anySelected={anyStylePreference}
-                    onSelect={(key) => { setAnyStylePreference(false); setPreferredStyles(toggleLimit(preferredStyles, key, 4)); }}
-                    onAny={() => { setAnyStylePreference(true); setPreferredStyles([]); }}
-                    onContinue={() => void saveAndGo(3)}
-                  />
-                ) : null}
-                {step === 3 ? (
-                  <ColorStep
-                    avoid={dislikedColors}
-                    avoidOptions={metadata?.style_profile.disliked_colors || []}
-                    love={preferredColors}
-                    loveOptions={metadata?.style_profile.preferred_colors || []}
-                    onAvoid={(key) => setDislikedColors(toggle(dislikedColors, key))}
-                    anyLoveSelected={anyColorPreference}
-                    onAnyLove={() => { setAnyColorPreference(true); setPreferredColors([]); }}
-                    onLove={(key) => { setAnyColorPreference(false); setPreferredColors(toggle(preferredColors, key)); }}
-                    onContinue={() => void saveAndGo(4)}
-                  />
-                ) : null}
-                {step === 4 ? (
-                  <WardrobeStep
-                    items={uploadedItems}
-                    isUploading={isUploading}
-                    onCamera={() => void upload("camera")}
-                    onComplete={() => void completeOnboarding()}
-                    onGallery={() => void upload("gallery")}
-                    onLater={() => void deferOnboarding()}
-                    statuses={metadata?.clothing_items.statuses || []}
-                  />
-                ) : null}
-                {error ? <Text style={styles.error}>{error}</Text> : null}
-                {isSaving ? <ActivityIndicator color={colors.primary} /> : null}
+                <ScrollView
+                  contentContainerStyle={[styles.cardContent, usesSidebar && styles.desktopCardContent]}
+                  keyboardShouldPersistTaps="handled"
+                  nestedScrollEnabled
+                  showsVerticalScrollIndicator={usesSidebar}
+                  style={usesSidebar ? styles.desktopCardScroll : undefined}
+                >
+                  {!usesSidebar ? <WearoMobileLogo compact /> : null}
+                  {step > 0 ? <Progress step={step} /> : null}
+                  {step === 0 ? (
+                    <Welcome onContinue={() => void saveAndGo(1)} onSkip={() => void deferOnboarding()} />
+                  ) : null}
+                  {step === 1 ? (
+                    <AboutYou
+                      ageRange={ageRange}
+                      build={build}
+                      genderPreference={genderPreference}
+                      height={height}
+                      onAgeRange={setAgeRange}
+                      onBuild={setBuild}
+                      onGenderPreference={setGenderPreference}
+                      onHeight={(value) => setHeight(value.replace(/\D/g, "").slice(0, 3))}
+                      onContinue={() => void saveAndGo(2)}
+                    />
+                  ) : null}
+                  {step === 2 ? (
+                    <StyleStep
+                      genderPreference={genderPreference}
+                      options={metadata?.style_profile.preferred_styles || []}
+                      selected={preferredStyles}
+                      anySelected={anyStylePreference}
+                      onSelect={(key) => { setAnyStylePreference(false); setPreferredStyles(toggleLimit(preferredStyles, key, MAX_PREFERRED_STYLES)); }}
+                      onAny={() => { setAnyStylePreference(true); setPreferredStyles([]); }}
+                      onContinue={() => void saveAndGo(3)}
+                    />
+                  ) : null}
+                  {step === 3 ? (
+                    <ColorStep
+                      avoid={dislikedColors}
+                      avoidOptions={metadata?.style_profile.disliked_colors || []}
+                      love={preferredColors}
+                      loveOptions={metadata?.style_profile.preferred_colors || []}
+                      onAvoid={(key) => setDislikedColors(toggle(dislikedColors, key))}
+                      anyLoveSelected={anyColorPreference}
+                      onAnyLove={() => { setAnyColorPreference(true); setPreferredColors([]); }}
+                      onLove={(key) => { setAnyColorPreference(false); setPreferredColors(toggle(preferredColors, key)); }}
+                      onContinue={() => void saveAndGo(4)}
+                    />
+                  ) : null}
+                  {step === 4 ? (
+                    <WardrobeStep
+                      items={uploadedItems}
+                      isUploading={isUploading}
+                      onCamera={() => void upload("camera")}
+                      onComplete={() => void completeOnboarding()}
+                      onGallery={() => void upload("gallery")}
+                      onLater={() => void deferOnboarding()}
+                      statuses={metadata?.clothing_items.statuses || []}
+                    />
+                  ) : null}
+                  {error ? <Text style={styles.error}>{error}</Text> : null}
+                  {isSaving ? <ActivityIndicator color={colors.primary} /> : null}
+                </ScrollView>
               </View>
             </View>
           </ScrollView>
@@ -350,11 +367,11 @@ function AboutYou(props: AboutProps) {
 function StyleStep({ genderPreference, options, selected, anySelected, onSelect, onAny, onContinue }: { genderPreference: string; options: MetadataOption[]; selected: string[]; anySelected: boolean; onSelect: (key: string) => void; onAny: () => void; onContinue: () => void }) {
   return (
     <View style={styles.step}>
-      <StepHeading title="What's your style?" subtitle="Pick 2–4 styles that feel most like you." />
+      <StepHeading title="What's your style?" subtitle={`Pick 2–${MAX_PREFERRED_STYLES} styles that feel most like you.`} />
       <Text style={styles.inspirationContext}>Showing {choiceLabel(genderPreference, dressPreferences).toLowerCase()} inspiration</Text>
       <PreferenceToggle label="I'm open to any style" selected={anySelected} onPress={onAny} />
       <View style={styles.visualGrid}>{options.map((option, index) => <VisualOption genderPreference={genderPreference} index={index} key={option.key} option={option} selected={selected.includes(option.key)} onPress={() => onSelect(option.key)} />)}</View>
-      <Text style={styles.selectionHint}>{anySelected ? "No style restrictions" : `${selected.length} of 4 selected`}</Text>
+      <Text style={styles.selectionHint}>{anySelected ? "No style restrictions" : `${selected.length} of ${MAX_PREFERRED_STYLES} selected`}</Text>
       <Button disabled={!anySelected && selected.length < 2} onPress={onContinue} title="Continue" />
     </View>
   );
@@ -457,16 +474,16 @@ function colorValue(key: string) { return ({ black: "#242424", white: "#FFFFFF",
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 }, flex: { flex: 1 }, background: { flex: 1 }, scrim: { backgroundColor: "rgba(250,249,253,0.72)", bottom: 0, left: 0, position: "absolute", right: 0, top: 0 },
   scroll: { alignItems: "center", flexGrow: 1, justifyContent: "center", padding: spacing.lg },
-  shell: { alignItems: "stretch", maxWidth: 560, width: "100%" }, desktopShell: { alignItems: "stretch", flexDirection: "row", maxWidth: 1120, minHeight: 700 },
-  story: { backgroundColor: "rgba(255,255,255,0.78)", borderBottomLeftRadius: radius.xl, borderTopLeftRadius: radius.xl, flex: 1, justifyContent: "space-between", maxWidth: 480, padding: spacing.xxxl },
+  shell: { alignItems: "stretch", maxWidth: 560, width: "100%" }, desktopShell: { alignItems: "stretch", flexDirection: "row", maxWidth: 1120, minHeight: 680, overflow: "hidden" },
+  story: { backgroundColor: "rgba(255,255,255,0.82)", borderBottomLeftRadius: radius.xl, borderTopLeftRadius: radius.xl, flex: 1, justifyContent: "space-between", maxWidth: 480, minWidth: 0, padding: spacing.xxxl },
   storyCopy: { gap: spacing.md }, storyKicker: { ...typography.caption, color: colors.primary }, storyTitle: { ...typography.display, color: colors.text }, storyText: { ...typography.body, color: colors.textMuted, maxWidth: 360 }, storyStats: { flexDirection: "row", gap: spacing.xl }, statValue: { ...typography.subheading, color: colors.text }, statLabel: { ...typography.caption, color: colors.textMuted, marginTop: 3 },
-  card: { ...shadows.card, backgroundColor: "rgba(255,255,255,0.96)", borderRadius: radius.xl, gap: spacing.lg, padding: spacing.xl }, desktopCard: { borderBottomLeftRadius: 0, borderTopLeftRadius: 0, justifyContent: "center", maxWidth: 600, padding: spacing.xxxl, width: "54%" },
+  card: { ...shadows.card, backgroundColor: "rgba(255,255,255,0.96)", borderRadius: radius.xl, overflow: "hidden" }, cardContent: { gap: spacing.lg, padding: spacing.xl }, desktopCard: { borderBottomLeftRadius: 0, borderTopLeftRadius: 0, maxWidth: 620, width: "56%" }, desktopCardContent: { padding: spacing.xxxl, paddingBottom: spacing.xxxl }, desktopCardScroll: { flex: 1 },
   progressHeader: { gap: spacing.xs }, progressText: { ...typography.caption, color: colors.primary }, progressTrack: { backgroundColor: "#ECE9F6", borderRadius: radius.pill, height: 6, overflow: "hidden" }, progressFill: { backgroundColor: colors.primary, borderRadius: radius.pill, height: 6 },
   step: { gap: spacing.lg }, heading: { gap: spacing.xs }, heroMark: { alignItems: "center", marginVertical: spacing.sm }, title: { ...typography.heading, color: colors.text }, subtitle: { ...typography.body, color: colors.textMuted },
   miniFeatures: { gap: spacing.xs }, miniFeature: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radius.md, flexDirection: "row", gap: spacing.sm, padding: spacing.sm }, miniFeatureNumber: { ...typography.caption, color: colors.primary }, miniFeatureText: { ...typography.body, color: colors.text, fontWeight: "600" },
   fieldGroup: { gap: spacing.sm }, label: { ...typography.caption, color: colors.text }, optional: { color: colors.textSoft, fontWeight: "500" }, choiceRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }, choice: { borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, minHeight: 44, paddingHorizontal: spacing.md, justifyContent: "center" }, choiceSelected: { backgroundColor: "#EFECFF", borderColor: colors.primary }, choiceText: { ...typography.body, color: colors.textMuted }, choiceTextSelected: { color: colors.primary, fontWeight: "700" },
   heightField: { alignItems: "center", borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, flexDirection: "row", maxWidth: 180, paddingHorizontal: spacing.md }, heightInput: { ...typography.body, color: colors.text, flex: 1, minHeight: 48, outlineStyle: "none" } as never, unit: { ...typography.body, color: colors.textMuted },
-  inspirationContext: { ...typography.caption, color: colors.primary, marginTop: -spacing.sm }, visualGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }, visualOption: { aspectRatio: 1, backgroundColor: "#E8E5ED", borderColor: "transparent", borderRadius: radius.md, borderWidth: 3, justifyContent: "flex-end", overflow: "hidden", padding: spacing.sm, position: "relative", width: "47%" }, optionSelected: { borderColor: colors.primary }, visualOptionImage: { height: "100%", left: 0, position: "absolute", top: 0, width: "100%" }, visualOptionScrim: { backgroundColor: "rgba(16,16,24,0.5)", bottom: 0, height: 58, left: 0, position: "absolute", right: 0 }, visualOptionText: { ...typography.button, color: colors.surface, maxWidth: "82%", textShadowColor: "rgba(0,0,0,0.5)", textShadowOffset: { height: 1, width: 0 }, textShadowRadius: 3 }, check: { backgroundColor: colors.primary, borderColor: colors.surface, borderRadius: radius.pill, borderWidth: 2, color: colors.surface, fontWeight: "800", height: 28, lineHeight: 24, position: "absolute", right: 8, textAlign: "center", top: 8, width: 28 }, selectionHint: { ...typography.caption, color: colors.textMuted, textAlign: "center" },
+  inspirationContext: { ...typography.caption, color: colors.primary, marginTop: -spacing.sm }, visualGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }, visualOption: { aspectRatio: 1.16, backgroundColor: "#E8E5ED", borderColor: "transparent", borderRadius: radius.md, borderWidth: 3, justifyContent: "flex-end", overflow: "hidden", padding: spacing.sm, position: "relative", width: "47%" }, optionSelected: { borderColor: colors.primary }, visualOptionImage: { height: "100%", left: 0, position: "absolute", top: 0, width: "100%" }, visualOptionScrim: { backgroundColor: "rgba(16,16,24,0.56)", bottom: 0, height: 52, left: 0, position: "absolute", right: 0 }, visualOptionText: { ...typography.button, color: colors.surface, maxWidth: "82%", textShadowColor: "rgba(0,0,0,0.5)", textShadowOffset: { height: 1, width: 0 }, textShadowRadius: 3 }, check: { backgroundColor: colors.primary, borderColor: colors.surface, borderRadius: radius.pill, borderWidth: 2, color: colors.surface, fontWeight: "800", height: 28, lineHeight: 24, position: "absolute", right: 8, textAlign: "center", top: 8, width: 28 }, selectionHint: { ...typography.caption, color: colors.textMuted, textAlign: "center" },
   colorGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }, colorChoice: { alignItems: "center", borderColor: "transparent", borderRadius: radius.md, borderWidth: 1, gap: spacing.xxs, padding: spacing.xs, width: 72 }, colorChoiceSelected: { backgroundColor: "#F0EDFF", borderColor: colors.primary }, swatch: { borderColor: colors.border, borderRadius: radius.pill, borderWidth: 1, height: 34, width: 34 }, colorLabel: { ...typography.caption, color: colors.textMuted, fontSize: 11 },
   preferenceToggle: { alignItems: "center", alignSelf: "flex-start", borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, flexDirection: "row", gap: spacing.sm, minHeight: 44, paddingHorizontal: spacing.md }, preferenceToggleSelected: { backgroundColor: "#EFECFF", borderColor: colors.primary }, preferenceCheck: { alignItems: "center", borderColor: colors.textSoft, borderRadius: 4, borderWidth: 1, height: 20, justifyContent: "center", width: 20 }, preferenceCheckSelected: { backgroundColor: colors.primary, borderColor: colors.primary }, preferenceCheckText: { color: colors.surface, fontSize: 13, fontWeight: "800" }, preferenceToggleText: { ...typography.body, color: colors.textMuted }, preferenceToggleTextSelected: { color: colors.primary, fontWeight: "700" },
   wardrobeIcon: { alignItems: "center", alignSelf: "center", backgroundColor: "#EFECFF", borderRadius: radius.pill, height: 80, justifyContent: "center", width: 80 }, wardrobeIconText: { color: colors.primary, fontSize: 38, fontWeight: "900" }, uploadAction: { alignItems: "center", borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, flexDirection: "row", gap: spacing.sm, padding: spacing.md }, uploadSymbol: { alignItems: "center", backgroundColor: "#EFECFF", borderRadius: radius.md, height: 44, justifyContent: "center", width: 44 }, uploadSymbolText: { color: colors.primary, fontSize: 28, lineHeight: 30 }, uploadTitle: { ...typography.button, color: colors.text }, uploadDescription: { ...typography.caption, color: colors.textMuted, fontWeight: "500" }, arrow: { color: colors.primary, fontSize: 28 }, uploading: { alignItems: "center", flexDirection: "row", gap: spacing.sm, justifyContent: "center" }, uploadingText: { ...typography.caption, color: colors.textMuted }, uploadCount: { ...typography.caption, color: colors.success, textAlign: "center" }, uploadedGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }, uploadedItem: { backgroundColor: colors.surfaceMuted, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, overflow: "hidden", width: "31%" }, uploadedImage: { aspectRatio: 1, width: "100%" }, uploadedPlaceholder: { alignItems: "center", aspectRatio: 1, backgroundColor: "#EFECFF", justifyContent: "center" }, uploadedPlaceholderText: { color: colors.primary, fontSize: 26, fontWeight: "800" }, uploadedCopy: { gap: 2, padding: spacing.xs }, uploadedName: { ...typography.caption, color: colors.text, fontWeight: "700" }, uploadedStatus: { ...typography.caption, color: colors.primary, fontSize: 10, textTransform: "capitalize" },
