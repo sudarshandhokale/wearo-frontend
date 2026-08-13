@@ -3,15 +3,17 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-
 import { ChevronRight, Clock3, Sparkles } from "lucide-react-native";
 
 import { AppService } from "../api/AppService";
-import type { Outfit, RecommendationRequest, RoutineOccurrence, WearHistory } from "../api/types";
+import type { ExternalContext, Outfit, RecommendationRequest, RoutineOccurrence, WearHistory } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { useAppData } from "../context/AppDataContext";
 import { OutfitCover } from "../components/OutfitCover";
+import { Button } from "../components/Button";
 import { ScreenContainer } from "../components/ScreenContainer";
 import { useResponsive } from "../hooks/useResponsive";
 import type { Navigate } from "../navigation/types";
 import { AIStylistService, SuggestedPrompt } from "../services/AIStylistService";
 import { colors, radius, shadows, spacing, typography } from "../theme";
+import { matchLabel } from "../utils/outfitPresentation";
 
 type HomeScreenProps = {
   onNavigate: Navigate;
@@ -29,8 +31,13 @@ export function HomeScreen({ onNavigate }: HomeScreenProps) {
   const [todayRoutines, setTodayRoutines] = useState<RoutineOccurrence[]>([]);
   const [prompt, setPrompt] = useState("");
   const [promptFocused, setPromptFocused] = useState(false);
+  const [weather, setWeather] = useState<ExternalContext | null>(null);
+  const [wearingId, setWearingId] = useState<Outfit["id"] | null>(null);
+  const [wornId, setWornId] = useState<Outfit["id"] | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const readyRoutines = todayRoutines.filter((occurrence) => occurrence.status === "generated" && occurrence.outfit);
   const upcomingRoutines = todayRoutines.filter((occurrence) => occurrence.status !== "generated" || !occurrence.outfit);
+  const featuredOutfit = readyRoutines[0]?.outfit || recentRequests[0]?.outfits?.[0] || null;
 
   useEffect(() => {
     AIStylistService.suggestedPrompts().then(setPrompts);
@@ -43,8 +50,12 @@ export function HomeScreen({ onNavigate }: HomeScreenProps) {
       const resolved = await Promise.allSettled(response.data.map(async (wear) => ({ ...wear, outfit: wear.outfit || (await AppService.outfit(wear.outfit_id)).data })));
       if (!cancelled) setRecentWears(resolved.flatMap((result) => result.status === "fulfilled" ? [result.value] : []));
     }).catch(() => undefined);
+    if (user?.preferred_city) {
+      const date = new Date().toISOString().slice(0, 10);
+      void AppService.context(user.preferred_city, date, date).then((response) => { if (!cancelled) setWeather(response.data); }).catch(() => undefined);
+    }
     return () => { cancelled = true; clearInterval(routinePoll); };
-  }, []);
+  }, [user?.preferred_city]);
 
   const firstName = user?.first_name || "there";
   const onboardingStep = Number(styleProfile?.additional_preferences.onboarding_step) || 1;
@@ -70,6 +81,20 @@ export function HomeScreen({ onNavigate }: HomeScreenProps) {
     onNavigate("ask", context ? { prompt: context, autoSend: true } : undefined);
   }
 
+  async function wearFeatured() {
+    if (!featuredOutfit) return;
+    setWearingId(featuredOutfit.id);
+    setActionError(null);
+    try {
+      await AppService.wearOutfit(featuredOutfit.id, { worn_on: new Date().toISOString().slice(0, 10), occasion: featuredOutfit.occasion, context: featuredOutfit.context });
+      setWornId(featuredOutfit.id);
+    } catch (caughtError) {
+      setActionError(caughtError instanceof Error ? caughtError.message : "Could not add this outfit. Please try again.");
+    } finally {
+      setWearingId(null);
+    }
+  }
+
   return (
     <ScreenContainer>
       <View style={[styles.layout, usesSidebar && styles.desktopLayout]}>
@@ -86,6 +111,7 @@ export function HomeScreen({ onNavigate }: HomeScreenProps) {
           <View style={styles.hero}>
             <Text style={styles.kicker}>Your wardrobe. Your style. Perfected by AI.</Text>
             <Text style={styles.title}>Good morning,{"\n"}{firstName} 👋</Text>
+            {weather ? <Text style={styles.contextLine}>{weather.city || user?.preferred_city}{weather.weather[0] ? ` · ${weatherLine(weather.weather[0])}` : ""}</Text> : user?.preferred_city ? <Text style={styles.contextLine}>{user.preferred_city}</Text> : null}
             <View style={[styles.promptBar, promptFocused && styles.promptBarFocused]}>
               <TextInput
                 accessibilityLabel="Ask WEARO what to wear"
@@ -108,6 +134,16 @@ export function HomeScreen({ onNavigate }: HomeScreenProps) {
               </Pressable>
             </View>
           </View>
+
+          {featuredOutfit ? <View style={styles.featuredSection}>
+            <View style={styles.sectionHeader}><View><Text style={styles.panelTitle}>Your look for today</Text><Text style={styles.sectionSubtitle}>A strong option from your wardrobe</Text></View><View style={styles.bestBadge}><Text style={styles.bestBadgeText}>{matchLabel(featuredOutfit.recommendation_score)}</Text></View></View>
+            <View style={[styles.featuredCard, usesSidebar && styles.featuredCardDesktop]}>
+              <OutfitCover coverImages={featuredOutfit.cover_images} style={[styles.featuredCover, usesSidebar ? styles.featuredCoverDesktop : styles.featuredCoverMobile]} />
+              <View style={styles.featuredCopy}><Text style={styles.featuredTitle}>{featuredOutfit.name}</Text>{featuredOutfit.occasion_label ? <Text style={styles.featuredOccasion}>{featuredOutfit.occasion_label}</Text> : null}<Text numberOfLines={3} style={styles.featuredReason}>{featuredOutfit.explanation}</Text><View style={styles.featuredActions}><Button loading={wearingId === featuredOutfit.id} onPress={() => void wearFeatured()} style={styles.featuredButton} title={wornId === featuredOutfit.id ? "Added to today's outfit ✓" : "Wear this"} /><Button onPress={() => onNavigate("outfits", { outfitId: featuredOutfit.id })} style={styles.featuredButton} title="Try on" variant="secondary" /></View></View>
+            </View>
+            <View style={styles.refinements}><Text style={styles.refinementLabel}>Want something different?</Text><ScrollView contentContainerStyle={styles.refinementRail} horizontal showsHorizontalScrollIndicator={false}>{["More casual", "Smarter", "Different colors", "Something new", "Surprise me"].map((item) => <Pressable key={item} onPress={() => askWearo(`${item} for today`)} style={styles.refinementChip}><Text style={styles.refinementText}>{item}</Text></Pressable>)}</ScrollView></View>
+            {actionError ? <Text style={styles.actionError}>{actionError}</Text> : null}
+          </View> : null}
 
           {recentRequests.length ? (
             <View style={styles.activitySection}>
@@ -180,7 +216,7 @@ export function HomeScreen({ onNavigate }: HomeScreenProps) {
             <View style={styles.quickActions}>
               <QuickAction
                 description="Describe plans and get outfit ideas."
-                label="Ask WEARO"
+                label="Style me"
                 onPress={() => onNavigate("ask")}
                 symbol="✦"
               />
@@ -191,16 +227,16 @@ export function HomeScreen({ onNavigate }: HomeScreenProps) {
                 symbol="+"
               />
               <QuickAction
-                description="Save looks and avoid repeats."
-                label="Plan an Outfit"
-                onPress={() => onNavigate("outfits")}
+                description="Prepare a week, trip, or recurring routine."
+                label="Plan ahead"
+                onPress={() => onNavigate("plans")}
                 symbol="◇"
               />
             </View>
           </View>
 
           <View style={styles.panel}>
-            <Text style={styles.panelTitle}>Suggested prompts</Text>
+            <Text style={styles.panelTitle}>Need ideas?</Text>
             <View style={styles.promptList}>
               {prompts.map((prompt) => (
                 <Pressable
@@ -280,6 +316,7 @@ function routineTime(value: string) {
 function formatWornDate(value: string) { const date = new Date(`${value}T12:00:00`); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short" }).format(date); }
 function humanize(value: string) { return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()); }
 function relativeDate(value: string) { const parsed = new Date(value); if (Number.isNaN(parsed.getTime())) return value; const days = Math.floor((Date.now() - parsed.getTime()) / 86400000); if (days <= 0) return "Today"; if (days === 1) return "Yesterday"; if (days < 7) return `${days} days ago`; return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(parsed); }
+function weatherLine(day: ExternalContext["weather"][number]) { const temperature = typeof day.temperature_max === "number" ? `${Math.round(day.temperature_max)}°C` : null; return [temperature, day.condition_label || day.condition].filter(Boolean).join(" · "); }
 
 const styles = StyleSheet.create({
   layout: {
@@ -302,6 +339,27 @@ const styles = StyleSheet.create({
   hero: {
     gap: spacing.md
   },
+  contextLine: { ...typography.body, color: colors.textMuted },
+  featuredSection: { gap: spacing.md },
+  actionError: { ...typography.caption, color: colors.error },
+  featuredCard: { ...shadows.card, backgroundColor: colors.surface, borderRadius: radius.lg, overflow: "hidden" },
+  featuredCardDesktop: { flexDirection: "row" },
+  featuredCover: { aspectRatio: 1.05, width: "100%" },
+  featuredCoverMobile: { aspectRatio: 1.35 },
+  featuredCoverDesktop: { aspectRatio: 1, width: "48%" },
+  featuredCopy: { flex: 1, gap: spacing.sm, justifyContent: "center", padding: spacing.lg },
+  featuredTitle: { ...typography.heading, color: colors.text },
+  featuredOccasion: { ...typography.caption, color: colors.primary },
+  featuredReason: { ...typography.body, color: colors.textMuted },
+  featuredActions: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.xs },
+  featuredButton: { flex: 1, minWidth: 130 },
+  bestBadge: { backgroundColor: "#EFECFF", borderRadius: radius.pill, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  bestBadgeText: { ...typography.caption, color: colors.primary },
+  refinements: { gap: spacing.xs },
+  refinementLabel: { ...typography.caption, color: colors.textMuted },
+  refinementRail: { gap: spacing.xs, paddingRight: spacing.md },
+  refinementChip: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.pill, borderWidth: 1, justifyContent: "center", minHeight: 38, paddingHorizontal: spacing.md },
+  refinementText: { ...typography.caption, color: colors.text },
   completionBanner: {
     alignItems: "center",
     backgroundColor: "#EFECFF",

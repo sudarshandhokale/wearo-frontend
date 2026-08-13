@@ -15,8 +15,9 @@ import { useAppData } from "../context/AppDataContext";
 import { useResponsive } from "../hooks/useResponsive";
 import type { Navigate } from "../navigation/types";
 import { colors, radius, shadows, spacing, typography } from "../theme";
+import { matchLabel } from "../utils/outfitPresentation";
 
-export function OutfitsScreen({ initialOutfitRequest, onNavigate }: { initialOutfitRequest?: { id: number; outfitId: number | string } | null; onNavigate: Navigate }) {
+export function OutfitsScreen({ initialOutfitRequest, looksOnly = false, onNavigate }: { initialOutfitRequest?: { id: number; outfitId: number | string } | null; looksOnly?: boolean; onNavigate: Navigate }) {
   const { metadata } = useAppData();
   const { user } = useAuth();
   const { isMobile } = useResponsive();
@@ -27,7 +28,8 @@ export function OutfitsScreen({ initialOutfitRequest, onNavigate }: { initialOut
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const groups = useMemo(() => groupOutfits(outfits), [outfits]);
+  const displayedOutfits = useMemo(() => looksOnly ? outfits.filter((outfit) => outfit.status === "saved") : outfits, [looksOnly, outfits]);
+  const groups = useMemo(() => groupOutfits(displayedOutfits), [displayedOutfits]);
 
   const load = useCallback(async (nextPage = 1, append = false) => {
     setLoading(true); setError(null);
@@ -53,12 +55,12 @@ export function OutfitsScreen({ initialOutfitRequest, onNavigate }: { initialOut
   function changed(outfit: Outfit) { setSelected(outfit); setOutfits((current) => current.map((item) => item.id === outfit.id ? outfit : item)); }
 
   return <ScreenContainer resetKey={selected ? `outfit-${selected.id}` : `outfits-${section}`}>
-    <View style={styles.header}>{selected ? <Pressable accessibilityLabel="Back to outfits" onPress={() => setSelected(null)} style={styles.back}><ChevronLeft color={colors.text} size={22} /></Pressable> : null}<View style={styles.headerCopy}><Text style={styles.title}>{selected ? selected.name : "Outfits"}</Text><Text style={styles.subtitle}>{selected?.prompt || "Grouped by what you asked WEARO to style."}</Text></View></View>
+    <View style={styles.header}>{selected ? <Pressable accessibilityLabel="Back to outfits" onPress={() => setSelected(null)} style={styles.back}><ChevronLeft color={colors.text} size={22} /></Pressable> : null}<View style={styles.headerCopy}><Text style={styles.title}>{selected ? selected.name : looksOnly ? "Saved looks" : "Outfits"}</Text><Text style={styles.subtitle}>{selected?.prompt || (looksOnly ? "Outfits you saved to wear again." : "Grouped by what you asked WEARO to style.")}</Text></View></View>
     {error ? <ErrorBanner message={error} /> : null}
-    {!selected ? <View style={styles.tabs}><Pressable onPress={() => setSection("looks")} style={[styles.tab, section === "looks" && styles.tabActive]}><Text style={[styles.tabText, section === "looks" && styles.tabTextActive]}>Looks</Text></Pressable><Pressable onPress={() => setSection("plans")} style={[styles.tab, section === "plans" && styles.tabActive]}><Text style={[styles.tabText, section === "plans" && styles.tabTextActive]}>Plans</Text></Pressable><Pressable onPress={() => setSection("routines")} style={[styles.tab, section === "routines" && styles.tabActive]}><Text style={[styles.tabText, section === "routines" && styles.tabTextActive]}>Routines</Text></Pressable></View> : null}
+    {!selected && !looksOnly ? <View style={styles.tabs}><Pressable onPress={() => setSection("looks")} style={[styles.tab, section === "looks" && styles.tabActive]}><Text style={[styles.tabText, section === "looks" && styles.tabTextActive]}>Looks</Text></Pressable><Pressable onPress={() => setSection("plans")} style={[styles.tab, section === "plans" && styles.tabActive]}><Text style={[styles.tabText, section === "plans" && styles.tabTextActive]}>Plans</Text></Pressable><Pressable onPress={() => setSection("routines")} style={[styles.tab, section === "routines" && styles.tabActive]}><Text style={[styles.tabText, section === "routines" && styles.tabTextActive]}>Routines</Text></Pressable></View> : null}
     {section === "plans" && !selected ? <StylingPlans defaultCity={user?.preferred_city} roles={metadata?.outfits.roles || []} /> : section === "routines" && !selected ? <StylingRoutines metadata={metadata?.routines} roles={metadata?.outfits.roles || []} /> : selected ? <OutfitDetail initialOutfit={selected} onChange={changed} roles={metadata?.outfits.roles || []} /> : <>
       {loading && !outfits.length ? <Loading /> : null}
-      {!loading && !outfits.length ? <View style={styles.empty}><Text style={styles.emptyTitle}>No outfits yet</Text><Text style={styles.subtitle}>Ask WEARO to create your first looks from your wardrobe.</Text><Button onPress={() => onNavigate("ask")} title="Ask WEARO" /></View> : null}
+      {!loading && !displayedOutfits.length ? <View style={styles.empty}><Text style={styles.emptyTitle}>{looksOnly ? "No saved looks yet" : "No outfits yet"}</Text><Text style={styles.subtitle}>{looksOnly ? "Save an outfit you love and it will stay here." : "Ask WEARO to create your first looks from your wardrobe."}</Text><Button onPress={() => onNavigate("ask")} title="Style an outfit" /></View> : null}
       <View style={styles.groups}>{groups.map((group) => <View key={group.key} style={styles.group}><View style={[styles.groupHeader, isMobile && styles.groupHeaderMobile]}><View style={[styles.groupHeading, isMobile && styles.groupHeadingMobile]}><Text style={styles.groupEyebrow}>STYLED FOR</Text><Text style={styles.groupTitle}>{sentence(group.prompt)}</Text><Text style={styles.groupMeta}>{date(group.createdAt)} · {group.outfits.length} {group.outfits.length === 1 ? "look" : "looks"}</Text></View><View style={styles.contexts}>{group.contexts.map((context) => <View key={context} style={styles.contextChip}><Text style={styles.contextText}>{context}</Text></View>)}</View></View><View style={[styles.grid, isMobile && styles.mobileList]}>{group.outfits.map((outfit) => <OutfitCard isMobile={isMobile} key={outfit.id} onPress={() => void open(outfit)} outfit={outfit} />)}</View></View>)}</View>
       {hasMore ? <Button loading={loading} onPress={() => void load(page + 1, true)} style={styles.more} title="Load more" variant="secondary" /> : null}
     </>}
@@ -70,7 +72,7 @@ function OutfitCard({ outfit, onPress, isMobile }: { outfit: Outfit; onPress: ()
 
   return <Pressable onPress={onPress} style={({ pressed }) => [styles.card, isMobile && styles.cardMobile, pressed && styles.pressed]}>
     <OutfitCover coverImages={outfit.cover_images} style={[styles.cardCover, isMobile && styles.cardCoverMobile]} />
-    <View style={[styles.cardCopy, isMobile && styles.cardCopyMobile]}><View style={styles.cardTop}><Text numberOfLines={isMobile ? 2 : 1} style={styles.cardTitle}>{outfit.name}</Text>{outfit.status === "saved" ? <Bookmark color={colors.primary} fill={colors.primary} size={17} /> : outfit.status === "worn" ? <Check color={colors.success} size={18} /> : null}</View>{context ? <Text style={styles.cardContext}>{context}</Text> : null}<Text style={styles.meta}>{[outfit.status_label, outfit.recommendation_score != null ? `${Math.round(outfit.recommendation_score)}% match` : null].filter(Boolean).join(" · ")}</Text><Text style={styles.openLabel}>View outfit</Text></View>
+    <View style={[styles.cardCopy, isMobile && styles.cardCopyMobile]}><View style={styles.cardTop}><Text numberOfLines={isMobile ? 2 : 1} style={styles.cardTitle}>{outfit.name}</Text>{outfit.status === "saved" ? <Bookmark color={colors.primary} fill={colors.primary} size={17} /> : outfit.status === "worn" ? <Check color={colors.success} size={18} /> : null}</View>{context ? <Text style={styles.cardContext}>{context}</Text> : null}<Text style={styles.meta}>{[outfit.status_label, matchLabel(outfit.recommendation_score)].filter(Boolean).join(" · ")}</Text><Text style={styles.openLabel}>View outfit</Text></View>
   </Pressable>;
 }
 function Loading() { return <View style={styles.loading}><ActivityIndicator color={colors.primary} /><Text style={styles.subtitle}>Loading outfits</Text></View>; }

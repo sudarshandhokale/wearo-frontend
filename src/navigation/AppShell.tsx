@@ -1,16 +1,18 @@
 import { ReactNode, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Clock3, Home, Shirt, Sparkles, UserRound, WandSparkles } from "lucide-react-native";
+import { CalendarDays, Home, Shirt, Sparkles, UserRound } from "lucide-react-native";
 
 import { useResponsive } from "../hooks/useResponsive";
 import { colors, radius, shadows, spacing, typography } from "../theme";
-import { WearoResponsiveLogo, WearoWebLogo } from "../components/WearoLogo";
+import { WearoMark, WearoResponsiveLogo, WearoWebLogo } from "../components/WearoLogo";
 import { AskWearoScreen } from "../screens/AskWearoScreen";
 import { HistoryScreen } from "../screens/HistoryScreen";
 import { HomeScreen } from "../screens/HomeScreen";
 import { OutfitsScreen } from "../screens/OutfitsScreen";
+import { PlansScreen } from "../screens/PlansScreen";
 import { ProfileScreen } from "../screens/ProfileScreen";
+import { StyleScreen } from "../screens/StyleScreen";
 import { WardrobeScreen } from "../screens/WardrobeScreen";
 import type { AppScreen, Navigate, NavigationOptions, NavItem } from "./types";
 import { desktopNavItems, mobileNavItems } from "./types";
@@ -20,17 +22,23 @@ export function AppShell() {
   const [askRequest, setAskRequest] = useState<{ id: number; prompt?: string; autoSend: boolean; recommendationRequestId?: number | string } | null>(null);
   const [wardrobeItemRequest, setWardrobeItemRequest] = useState<{ id: number; clothingItemId: number | string } | null>(null);
   const [outfitRequest, setOutfitRequest] = useState<{ id: number; outfitId: number | string } | null>(null);
+  const [styleSection, setStyleSection] = useState<"stylist" | "saved" | "past">("stylist");
+  const [plansSection, setPlansSection] = useState<"plans" | "routines">("plans");
   const { usesSidebar } = useResponsive();
 
   const navigate: Navigate = (screen, options) => {
-    if (screen === "ask") {
+    const destination = screen === "ask" || screen === "outfits" || screen === "history" ? "style" : screen;
+    if (screen === "ask" || screen === "style") {
       setAskRequest(options?.prompt || options?.recommendationRequestId != null ? { id: Date.now(), prompt: options.prompt, autoSend: options.autoSend === true, recommendationRequestId: options.recommendationRequestId } : null);
+      setStyleSection(options?.styleSection || "stylist");
     }
     if (screen === "wardrobe") setWardrobeItemRequest(options?.clothingItemId != null ? { id: Date.now(), clothingItemId: options.clothingItemId } : null);
-    if (screen === "outfits") setOutfitRequest(options?.outfitId != null ? { id: Date.now(), outfitId: options.outfitId } : null);
-    setActiveScreen(screen);
+    if (screen === "outfits") { setOutfitRequest(options?.outfitId != null ? { id: Date.now(), outfitId: options.outfitId } : null); setStyleSection("saved"); }
+    if (screen === "history") setStyleSection("past");
+    if (screen === "plans") setPlansSection(options?.plansSection || "plans");
+    setActiveScreen(destination);
   };
-  const screen = useMemo(() => renderScreen(activeScreen, navigate, askRequest, wardrobeItemRequest, outfitRequest), [activeScreen, askRequest, wardrobeItemRequest, outfitRequest]);
+  const screen = useMemo(() => renderScreen(activeScreen, navigate, askRequest, wardrobeItemRequest, outfitRequest, styleSection, setStyleSection, plansSection, setPlansSection), [activeScreen, askRequest, wardrobeItemRequest, outfitRequest, plansSection, styleSection]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -38,8 +46,8 @@ export function AppShell() {
         {usesSidebar ? <Sidebar activeScreen={activeScreen} onSelect={navigate} /> : null}
         <View style={styles.content}>
           {!usesSidebar ? (
-            <View style={styles.mobileHeader}>
-              <WearoResponsiveLogo compact />
+            <View style={[styles.mobileHeader, activeScreen !== "home" && styles.mobileHeaderCompact]}>
+              {activeScreen === "home" ? <WearoResponsiveLogo compact /> : <WearoMark size="sm" />}
             </View>
           ) : null}
           {screen}
@@ -50,12 +58,16 @@ export function AppShell() {
   );
 }
 
-function renderScreen(activeScreen: AppScreen, navigate: Navigate, askRequest: { id: number; prompt?: string; autoSend: boolean; recommendationRequestId?: number | string } | null, wardrobeItemRequest: { id: number; clothingItemId: number | string } | null, outfitRequest: { id: number; outfitId: number | string } | null): ReactNode {
+function renderScreen(activeScreen: AppScreen, navigate: Navigate, askRequest: { id: number; prompt?: string; autoSend: boolean; recommendationRequestId?: number | string } | null, wardrobeItemRequest: { id: number; clothingItemId: number | string } | null, outfitRequest: { id: number; outfitId: number | string } | null, styleSection: "stylist" | "saved" | "past", setStyleSection: (value: "stylist" | "saved" | "past") => void, plansSection: "plans" | "routines", setPlansSection: (value: "plans" | "routines") => void): ReactNode {
   switch (activeScreen) {
     case "wardrobe":
       return <WardrobeScreen initialItemRequest={wardrobeItemRequest} onNavigate={navigate} />;
     case "ask":
       return <AskWearoScreen initialRequest={askRequest} onNavigate={navigate} />;
+    case "style":
+      return <StyleScreen askRequest={askRequest} initialOutfitRequest={outfitRequest} onNavigate={navigate} onSectionChange={setStyleSection} section={styleSection} />;
+    case "plans":
+      return <PlansScreen onSectionChange={setPlansSection} section={plansSection} />;
     case "outfits":
       return <OutfitsScreen initialOutfitRequest={outfitRequest} onNavigate={navigate} />;
     case "history":
@@ -154,9 +166,8 @@ function NavButton({
 function NavIcon({ active, screen }: { active: boolean; screen: AppScreen }) {
   const props = { color: active ? colors.primary : colors.textSoft, size: 21, strokeWidth: active ? 2.5 : 2 };
   if (screen === "wardrobe") return <Shirt {...props} />;
-  if (screen === "ask") return <Sparkles {...props} />;
-  if (screen === "outfits") return <WandSparkles {...props} />;
-  if (screen === "history") return <Clock3 {...props} />;
+  if (screen === "style") return <Sparkles {...props} />;
+  if (screen === "plans") return <CalendarDays {...props} />;
   if (screen === "profile") return <UserRound {...props} />;
   return <Home {...props} />;
 }
@@ -179,9 +190,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderBottomColor: colors.border,
     borderBottomWidth: 1,
-    minHeight: 72,
+    minHeight: 58,
     justifyContent: "center",
     paddingHorizontal: spacing.lg
+  },
+  mobileHeaderCompact: {
+    minHeight: 46
   },
   sidebar: {
     backgroundColor: colors.surface,
