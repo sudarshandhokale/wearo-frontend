@@ -25,6 +25,7 @@ export function OutfitDetail({ initialOutfit, roles, onChange }: { initialOutfit
   const { updateFullBodyImage, user } = useAuth();
   const { width } = useResponsive();
   const usesWideDetailLayout = width >= 1200;
+  const showcaseRatio = width >= 1200 ? 1.25 : width >= 768 ? 1.15 : 1;
   const [outfit, setOutfit] = useState(initialOutfit);
   const [reaction, setReaction] = useState<FeedbackReaction | null>(null);
   const [reason, setReason] = useState<DislikeReason | null>(null);
@@ -165,7 +166,7 @@ export function OutfitDetail({ initialOutfit, roles, onChange }: { initialOutfit
 
   return <><View style={[styles.layout, !usesWideDetailLayout && styles.stackedLayout]}>
     <View style={[styles.visualColumn, !usesWideDetailLayout && styles.stackedVisualColumn]}>
-      <View style={styles.showcase}>{showcaseUrl ? <AuthenticatedImage resizeMode="contain" url={showcaseUrl} style={styles.showcaseImage} /> : <OutfitCover coverImages={outfit.cover_images} style={styles.showcaseImage} />}{showcaseVisualization ? <View style={styles.showcaseCaption}><Badge text={showcaseVisualization.mode_label || (showcaseVisualization.mode === "try_on" ? "Try on" : "Flat lay")} /><Text style={styles.showcaseHint}>Your outfit view</Text></View> : null}</View>
+      <View style={styles.showcase}>{showcaseUrl ? <AuthenticatedImage resizeMode="contain" url={showcaseUrl} style={[styles.showcaseImage, { aspectRatio: showcaseRatio }]} /> : <OutfitCover coverImages={outfit.cover_images} style={[styles.showcaseImage, { aspectRatio: showcaseRatio }]} />}{showcaseVisualization ? <View style={styles.showcaseCaption}><Badge text={showcaseVisualization.mode_label || (showcaseVisualization.mode === "try_on" ? "Try on" : "Flat lay")} /><Text style={styles.showcaseHint}>Your outfit view</Text></View> : null}</View>
       <View style={styles.visualControls}>
         <View style={styles.visualControlHeader}><View><Text style={styles.visualControlTitle}>{copy.visualization.title}</Text><Text style={styles.showcaseHint}>Choose how you want to see this outfit.</Text></View><View style={styles.actions}><StatusAction active={mode === "flat_lay"} icon={<ImageIcon color={mode === "flat_lay" ? colors.primary : colors.textMuted} size={18} />} label={copy.visualization.flatLay} onPress={() => chooseVisualizationMode("flat_lay")} /><StatusAction active={mode === "try_on"} icon={<UserRound color={mode === "try_on" ? colors.primary : colors.textMuted} size={18} />} label={copy.visualization.tryOn} onPress={() => chooseVisualizationMode("try_on")} /></View></View>
         <Text style={styles.hint}>{mode === "try_on" ? (user?.full_body_image ? copy.visualization.tryOnHint : copy.visualization.missingPhotoHint) : copy.visualization.flatLayHint}</Text>

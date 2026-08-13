@@ -345,8 +345,8 @@ const styles = StyleSheet.create({
   featuredCard: { ...shadows.card, backgroundColor: colors.surface, borderRadius: radius.lg, overflow: "hidden" },
   featuredCardDesktop: { flexDirection: "row" },
   featuredCover: { aspectRatio: 1.05, width: "100%" },
-  featuredCoverMobile: { aspectRatio: 1.35 },
-  featuredCoverDesktop: { aspectRatio: 1, width: "48%" },
+  featuredCoverMobile: { aspectRatio: 1.45 },
+  featuredCoverDesktop: { aspectRatio: 1.4, width: "44%" },
   featuredCopy: { flex: 1, gap: spacing.sm, justifyContent: "center", padding: spacing.lg },
   featuredTitle: { ...typography.heading, color: colors.text },
   featuredOccasion: { ...typography.caption, color: colors.primary },
@@ -502,7 +502,7 @@ const styles = StyleSheet.create({
     width: "100%"
   },
   requestCover: {
-    height: 150,
+    aspectRatio: 1.3,
     width: "100%"
   },
   requestPlaceholder: {
@@ -644,12 +644,12 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm
   },
   recentImage: {
-    aspectRatio: 1,
+    aspectRatio: 1.2,
     width: "100%"
   },
   recentPlaceholder: {
     alignItems: "center",
-    aspectRatio: 1,
+    aspectRatio: 1.2,
     backgroundColor: "#EFECFF",
     justifyContent: "center",
     width: "100%"

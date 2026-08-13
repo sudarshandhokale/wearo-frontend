@@ -71,7 +71,7 @@ function OutfitCard({ outfit, onPress, isMobile }: { outfit: Outfit; onPress: ()
   const context = outfit.occasion_label || textContext(outfit.context, "occasion_label") || textContext(outfit.context, "activity_label");
 
   return <Pressable onPress={onPress} style={({ pressed }) => [styles.card, isMobile && styles.cardMobile, pressed && styles.pressed]}>
-    <OutfitCover coverImages={outfit.cover_images} style={[styles.cardCover, isMobile && styles.cardCoverMobile]} />
+    <OutfitCover coverImages={outfit.cover_images} style={[styles.cardCover, !isMobile && { aspectRatio: 1.25 }, isMobile && styles.cardCoverMobile]} />
     <View style={[styles.cardCopy, isMobile && styles.cardCopyMobile]}><View style={styles.cardTop}><Text numberOfLines={isMobile ? 2 : 1} style={styles.cardTitle}>{outfit.name}</Text>{outfit.status === "saved" ? <Bookmark color={colors.primary} fill={colors.primary} size={17} /> : outfit.status === "worn" ? <Check color={colors.success} size={18} /> : null}</View>{context ? <Text style={styles.cardContext}>{context}</Text> : null}<Text style={styles.meta}>{[outfit.status_label, matchLabel(outfit.recommendation_score)].filter(Boolean).join(" · ")}</Text><Text style={styles.openLabel}>View outfit</Text></View>
   </Pressable>;
 }
