@@ -24,7 +24,7 @@ export function useResponsive() {
       isTablet,
       isMobile,
       usesSidebar,
-      contentMaxWidth: isDesktop ? 1120 : isTablet ? 860 : 560,
+      contentMaxWidth: isDesktop ? 1180 : isTablet ? 900 : 560,
       wardrobeColumns: isDesktop ? 5 : isTablet ? 3 : 2
     };
   }, [height, width]);

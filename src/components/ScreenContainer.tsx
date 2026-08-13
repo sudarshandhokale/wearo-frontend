@@ -10,7 +10,7 @@ type ScreenContainerProps = {
 };
 
 export function ScreenContainer({ children, resetKey }: ScreenContainerProps) {
-  const { contentMaxWidth, usesSidebar } = useResponsive();
+  const { contentMaxWidth, isMobile, usesSidebar } = useResponsive();
   const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -21,7 +21,8 @@ export function ScreenContainer({ children, resetKey }: ScreenContainerProps) {
     <ScrollView
       contentContainerStyle={[
         styles.scrollContent,
-        usesSidebar ? styles.desktopScrollContent : styles.mobileScrollContent
+        usesSidebar ? styles.desktopScrollContent : styles.mobileScrollContent,
+        isMobile && styles.phoneScrollContent
       ]}
       ref={scrollRef}
     >
@@ -39,9 +40,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg
   },
+  phoneScrollContent: {
+    paddingBottom: 116,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.xl
+  },
   desktopScrollContent: {
     alignItems: "center",
-    padding: spacing.xxxl
+    paddingBottom: 64,
+    paddingHorizontal: spacing.xxxl,
+    paddingTop: spacing.xxl
   },
   inner: {
     alignSelf: "center",

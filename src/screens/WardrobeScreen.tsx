@@ -15,7 +15,7 @@ import { colors, radius, shadows, spacing, typography } from "../theme";
 import { pickWardrobeImage, pickWardrobeImages } from "../utils/imagePicker";
 
 type ViewMode = "list" | "form" | "detail";
-const initialInput: ClothingItemInput = { name: "", garment_type: "", category: "", subcategory: "", primary_color: "", secondary_colors: [], pattern: "", material: "", fit: "", season_tags: [], occasion_tags: [], style_tags: [], cultural_tags: [], formality_score: "" };
+const initialInput: ClothingItemInput = { name: "", garment_type: "", category: "", subcategory: "", primary_color: "", secondary_colors: [], pattern: "", material: "", fit: "", season_tags: [], occasion_tags: [], style_tags: [], cultural_tags: [], formality_score: "", user_usage_tags: [], use_ai_usage_tags: true };
 
 export function WardrobeScreen({ initialItemRequest, onNavigate }: { initialItemRequest?: { id: number; clothingItemId: number | string } | null; onNavigate: (screen: AppScreen) => void }) {
   void onNavigate;
@@ -33,6 +33,7 @@ export function WardrobeScreen({ initialItemRequest, onNavigate }: { initialItem
   const [hasMore, setHasMore] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [refreshStage, setRefreshStage] = useState<"analysis" | "polish" | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -69,7 +70,7 @@ export function WardrobeScreen({ initialItemRequest, onNavigate }: { initialItem
   }, [initialItemRequest?.id]);
 
   useEffect(() => {
-    if (mode !== "detail" || !selected || !isItemProcessing(selected)) return;
+    if (mode !== "detail" || !selected || (!isItemProcessing(selected) && refreshStage !== "analysis")) return;
 
     let cancelled = false;
     let attempts = 0;
@@ -79,19 +80,28 @@ export function WardrobeScreen({ initialItemRequest, onNavigate }: { initialItem
       try {
         const response = await AppService.clothingItem(selected.id);
         if (cancelled) return;
-        setSelected(response.data);
-        setItems((current) => current.map((item) => item.id === response.data.id ? response.data : item));
-        if (isItemProcessing(response.data)) timeout = setTimeout(poll, 4000);
+        let nextItem = response.data;
+        if (refreshStage === "analysis" && nextItem.status === "analysis_failed") {
+          setRefreshStage(null);
+        } else if (refreshStage === "analysis" && nextItem.status === "ready") {
+          const polishResponse = await AppService.polishClothingItem(nextItem.id);
+          nextItem = polishResponse.data;
+          setRefreshStage("polish");
+        }
+        setSelected(nextItem);
+        setItems((current) => current.map((item) => item.id === nextItem.id ? nextItem : item));
+        if (isItemProcessing(nextItem)) timeout = setTimeout(poll, 4000);
+        else setRefreshStage(null);
       } catch (caughtError) {
         if (!cancelled) {
           setError(messageFor(caughtError));
-          timeout = setTimeout(poll, 4000);
+          setRefreshStage(null);
         }
       }
     };
     let timeout = setTimeout(poll, 4000);
     return () => { cancelled = true; clearTimeout(timeout); };
-  }, [mode, selected?.id, selected?.status, selected?.image_polish?.status]);
+  }, [mode, refreshStage, selected?.id, selected?.status, selected?.image_polish?.status]);
 
   const categories = metadata?.clothing_items.categories || [];
   const statusOptions = metadata?.clothing_items.statuses || [];
@@ -155,15 +165,12 @@ export function WardrobeScreen({ initialItemRequest, onNavigate }: { initialItem
   async function reanalyze() {
     if (!selected) return;
     setIsSubmitting(true); setError(null);
-    try { const response = await AppService.reanalyzeClothingItem(selected.id); setSelected(response.data); setItems((current) => current.map((item) => item.id === response.data.id ? response.data : item)); }
-    catch (caughtError) { setError(messageFor(caughtError)); }
-    finally { setIsSubmitting(false); }
-  }
-
-  async function polish() {
-    if (!selected) return;
-    setIsSubmitting(true); setError(null);
-    try { const response = await AppService.polishClothingItem(selected.id); setSelected(response.data); setItems((current) => current.map((item) => item.id === response.data.id ? response.data : item)); }
+    try {
+      const response = await AppService.reanalyzeClothingItem(selected.id);
+      setRefreshStage("analysis");
+      setSelected(response.data);
+      setItems((current) => current.map((item) => item.id === response.data.id ? response.data : item));
+    }
     catch (caughtError) { setError(messageFor(caughtError)); }
     finally { setIsSubmitting(false); }
   }
@@ -172,11 +179,11 @@ export function WardrobeScreen({ initialItemRequest, onNavigate }: { initialItem
     if (!selected) {
       return <QuickAdd error={error} isSubmitting={isSubmitting} onBack={() => setMode("list")} onCamera={() => void addImages("camera")} onGallery={() => void addImages("gallery")} />;
     }
-    return <ItemForm categories={categories} error={error} fits={metadata?.clothing_items.fits || []} form={form} image={image} isSubmitting={isSubmitting} onBack={() => setMode(selected ? "detail" : "list")} onChange={setForm} onImage={chooseImage} onSubmit={submit} seasons={metadata?.style_profile.seasons || []} occasions={metadata?.style_profile.occasions || []} styles={metadata?.style_profile.preferred_styles || []} selectedCategory={selectedCategory} title={selected ? "Edit item" : "Add clothes"} />;
+    return <ItemForm categories={categories} error={error} fits={metadata?.clothing_items.fits || []} form={form} image={image} isSubmitting={isSubmitting} onBack={() => setMode(selected ? "detail" : "list")} onChange={setForm} onImage={chooseImage} onSubmit={submit} seasons={metadata?.style_profile.seasons || []} occasions={metadata?.style_profile.occasions || []} styles={metadata?.style_profile.preferred_styles || []} usageContexts={metadata?.clothing_items.usage_contexts || []} selectedCategory={selectedCategory} title={selected ? "Edit item" : "Add clothes"} />;
   }
 
   if (mode === "detail" && selected) {
-    return <ItemDetail confirmDelete={confirmDelete} error={error} isSubmitting={isSubmitting} item={selected} metadata={metadata} onBack={() => { setConfirmDelete(false); setMode("list"); }} onDelete={() => setConfirmDelete(true)} onDeleteCancel={() => setConfirmDelete(false)} onDeleteConfirm={remove} onEdit={() => startEdit(selected)} onPolish={polish} onReanalyze={reanalyze} />;
+    return <ItemDetail confirmDelete={confirmDelete} error={error} isSubmitting={isSubmitting} item={selected} metadata={metadata} onBack={() => { setConfirmDelete(false); setMode("list"); }} onDelete={() => setConfirmDelete(true)} onDeleteCancel={() => setConfirmDelete(false)} onDeleteConfirm={remove} onEdit={() => startEdit(selected)} onReanalyze={reanalyze} />;
   }
 
   return (
@@ -220,7 +227,7 @@ function QuickAdd(props: { error: string | null; isSubmitting: boolean; onBack: 
   </ScreenContainer>;
 }
 
-function ItemForm(props: { title: string; form: ClothingItemInput; image: PickedImage | null; categories: Array<MetadataOption & { subcategories: MetadataOption[] }>; selectedCategory?: MetadataOption & { subcategories: MetadataOption[] }; fits: MetadataOption[]; seasons: MetadataOption[]; occasions: MetadataOption[]; styles: MetadataOption[]; error: string | null; isSubmitting: boolean; onChange: (form: ClothingItemInput) => void; onImage: (source: "camera" | "gallery") => void; onSubmit: () => void; onBack: () => void }) {
+function ItemForm(props: { title: string; form: ClothingItemInput; image: PickedImage | null; categories: Array<MetadataOption & { subcategories: MetadataOption[] }>; selectedCategory?: MetadataOption & { subcategories: MetadataOption[] }; fits: MetadataOption[]; seasons: MetadataOption[]; occasions: MetadataOption[]; styles: MetadataOption[]; usageContexts: MetadataOption[]; error: string | null; isSubmitting: boolean; onChange: (form: ClothingItemInput) => void; onImage: (source: "camera" | "gallery") => void; onSubmit: () => void; onBack: () => void }) {
   const update = <K extends keyof ClothingItemInput>(key: K, value: ClothingItemInput[K]) => props.onChange({ ...props.form, [key]: value });
   return <ScreenContainer>
     <View style={styles.subHeader}><BackButton onPress={props.onBack} /><View><Text style={styles.title}>{props.title}</Text><Text style={styles.subtitle}>Add a clear image and WEARO will identify the clothing details.</Text></View></View>
@@ -240,6 +247,7 @@ function ItemForm(props: { title: string; form: ClothingItemInput; image: Picked
         <MultiOptionField label="Seasons" options={props.seasons} selected={props.form.season_tags} onSelect={(value) => update("season_tags", toggle(props.form.season_tags, value))} />
         <MultiOptionField label="Occasions" options={props.occasions} selected={props.form.occasion_tags} onSelect={(value) => update("occasion_tags", toggle(props.form.occasion_tags, value))} />
         <MultiOptionField label="Style tags" options={props.styles} selected={props.form.style_tags} onSelect={(value) => update("style_tags", toggle(props.form.style_tags, value))} />
+        {props.usageContexts.length ? <View style={styles.fieldGroup}><Pressable onPress={() => props.onChange({ ...props.form, use_ai_usage_tags: !props.form.use_ai_usage_tags, user_usage_tags: [] })} style={styles.aiUsageToggle}><View style={[styles.usageCheckbox, props.form.use_ai_usage_tags && styles.usageCheckboxActive]}>{props.form.use_ai_usage_tags ? <Text style={styles.usageCheck}>✓</Text> : null}</View><View style={styles.headerCopy}><Text style={styles.fieldLabel}>Use WEARO&apos;s usage classification</Text><Text style={styles.usageHelp}>Turn this off to choose how you use this item.</Text></View></Pressable>{!props.form.use_ai_usage_tags ? <MultiOptionField label="My usage" options={props.usageContexts} selected={props.form.user_usage_tags} onSelect={(value) => props.onChange({ ...props.form, use_ai_usage_tags: false, user_usage_tags: toggle(props.form.user_usage_tags, value) })} /> : null}</View> : null}
         <TagField label="Cultural tags" onChange={(values) => update("cultural_tags", values)} placeholder="maya traditional, guatemalan" values={props.form.cultural_tags} />
         {props.error ? <ErrorBanner message={props.error} /> : null}
         <Button loading={props.isSubmitting} onPress={props.onSubmit} title="Save item" />
@@ -248,7 +256,7 @@ function ItemForm(props: { title: string; form: ClothingItemInput; image: Picked
   </ScreenContainer>;
 }
 
-function ItemDetail(props: { item: ClothingItem; metadata: ReturnType<typeof useAppData>["metadata"]; error: string | null; isSubmitting: boolean; confirmDelete: boolean; onBack: () => void; onEdit: () => void; onDelete: () => void; onDeleteCancel: () => void; onDeleteConfirm: () => void; onPolish: () => void; onReanalyze: () => void }) {
+function ItemDetail(props: { item: ClothingItem; metadata: ReturnType<typeof useAppData>["metadata"]; error: string | null; isSubmitting: boolean; confirmDelete: boolean; onBack: () => void; onEdit: () => void; onDelete: () => void; onDeleteCancel: () => void; onDeleteConfirm: () => void; onReanalyze: () => void }) {
   const url = resolveImageUrl(props.item.display_image?.url);
   return <ScreenContainer>
     <View style={styles.subHeader}><BackButton onPress={props.onBack} /><View style={styles.headerCopy}><Text style={styles.title}>{itemDisplayName(props.item, props.metadata)}</Text><StatusBadge status={props.item.status} statuses={props.metadata?.clothing_items.statuses || []} /></View></View>
@@ -256,11 +264,11 @@ function ItemDetail(props: { item: ClothingItem; metadata: ReturnType<typeof use
       <View style={styles.detailImageFrame}>{url ? <AuthenticatedImage url={props.item.display_image?.url} style={styles.detailImage} /> : <View style={styles.imagePlaceholder}><Text style={styles.imagePlaceholderText}>No image</Text></View>}</View>
       <View style={styles.detailCard}>
         <Text style={styles.detailSectionTitle}>Item details</Text>
-        <View style={styles.detailGrid}><Detail label="Garment type" value={props.item.garment_type} /><Detail label="Category" value={labelFor(props.metadata?.clothing_items.categories || [], props.item.category)} /><Detail label="Subcategory" value={subcategoryLabel(props.metadata?.clothing_items.categories || [], props.item.subcategory)} /><Detail label="Color" value={props.item.primary_color} /><Detail label="Pattern" value={props.item.pattern} /><Detail label="Material" value={props.item.material} /><Detail label="Fit" value={labelFor(props.metadata?.clothing_items.fits || [], props.item.fit)} /><Detail label="Formality" value={props.item.formality_score ? `${props.item.formality_score}/10` : null} /><Detail label="Cultural tags" value={props.item.cultural_tags.map(humanize).join(", ")} /></View>
+        <View style={styles.detailGrid}><Detail label="Garment type" value={props.item.garment_type} /><Detail label="Category" value={props.item.category_label || labelFor(props.metadata?.clothing_items.categories || [], props.item.category)} /><Detail label="Subcategory" value={props.item.subcategory_label || subcategoryLabel(props.metadata?.clothing_items.categories || [], props.item.subcategory)} /><Detail label="Color" value={props.item.primary_color} /><Detail label="Pattern" value={props.item.pattern} /><Detail label="Material" value={props.item.material} /><Detail label="Fit" value={props.item.fit_label || labelFor(props.metadata?.clothing_items.fits || [], props.item.fit)} /><Detail label="Formality" value={props.item.formality_score ? `${props.item.formality_score}/10` : null} /><Detail label="Usage" value={usageLabels(props.item, props.metadata?.clothing_items.usage_contexts || []).join(", ")} /><Detail label="Usage source" value={props.item.usage_source_label} /><Detail label="Seasons" value={props.item.season_tag_labels?.join(", ")} /><Detail label="Occasions" value={props.item.occasion_tag_labels?.join(", ")} /><Detail label="Styles" value={props.item.style_tag_labels?.join(", ")} /><Detail label="Cultural tags" value={props.item.cultural_tag_labels?.join(", ")} /></View>
         {isItemProcessing(props.item) ? <Notice loading title={copy.clothing.processingTitle} text={props.item.status === "uploaded" || props.item.status === "processing" ? copy.clothing.processingText : "WEARO is preparing a cleaner wardrobe image. You can leave this screen while it finishes."} /> : null}
         {props.item.status === "analysis_failed" ? <Notice title={copy.clothing.failedTitle} text={copy.clothing.failedText} tone="error" /> : null}
         {props.error ? <ErrorBanner message={props.error} /> : null}
-        {props.confirmDelete ? <View style={styles.confirmBox}><Text style={styles.confirmTitle}>Remove this item?</Text><Text style={styles.confirmText}>It will be removed from your active wardrobe.</Text><View style={styles.imageActions}><Button onPress={props.onDeleteCancel} style={styles.flexButton} title="Cancel" variant="secondary" /><Button loading={props.isSubmitting} onPress={props.onDeleteConfirm} style={styles.flexButton} title="Remove" /></View></View> : <View style={styles.detailActions}><Button onPress={props.onEdit} style={styles.flexButton} title={copy.clothing.edit} />{!isItemProcessing(props.item) ? <View style={styles.imageActions}><Button loading={props.isSubmitting} onPress={props.onReanalyze} style={styles.flexButton} title={copy.clothing.reanalyze} variant="secondary" /><Button loading={props.isSubmitting} onPress={props.onPolish} style={styles.flexButton} title="Polish image" variant="secondary" /></View> : null}<Pressable onPress={props.onDelete}><Text style={styles.deleteText}>Remove item</Text></Pressable></View>}
+        {props.confirmDelete ? <View style={styles.confirmBox}><Text style={styles.confirmTitle}>Remove this item?</Text><Text style={styles.confirmText}>It will be removed from your active wardrobe.</Text><View style={styles.imageActions}><Button onPress={props.onDeleteCancel} style={styles.flexButton} title="Cancel" variant="secondary" /><Button loading={props.isSubmitting} onPress={props.onDeleteConfirm} style={styles.flexButton} title="Remove" /></View></View> : <View style={styles.detailActions}><Button onPress={props.onEdit} style={styles.flexButton} title={copy.clothing.edit} />{!isItemProcessing(props.item) ? <Button loading={props.isSubmitting} onPress={props.onReanalyze} style={styles.flexButton} title="Refresh AI details & image" variant="secondary" /> : null}<Pressable onPress={props.onDelete}><Text style={styles.deleteText}>Remove item</Text></Pressable></View>}
       </View>
     </View>
   </ScreenContainer>;
@@ -268,7 +276,7 @@ function ItemDetail(props: { item: ClothingItem; metadata: ReturnType<typeof use
 
 function ItemCard({ item, columns, statuses, onPress }: { item: ClothingItem; columns: number; statuses: MetadataOption[]; onPress: () => void }) {
   const url = resolveImageUrl(item.cover_image?.url);
-  return <Pressable onPress={onPress} style={[styles.itemCard, { width: columns <= 2 ? "47%" : `${Math.floor(100 / columns) - 2}%` }]}>{url ? <AuthenticatedImage url={item.cover_image?.url} style={styles.itemImage} /> : <View style={styles.itemImagePlaceholder}><Text style={styles.itemImagePlaceholderText}>W</Text></View>}<View style={styles.itemCopy}><StatusBadge compact status={item.status} statuses={statuses} /><Text numberOfLines={1} style={styles.itemName}>{item.name || item.garment_type || item.subcategory || "Clothing item"}</Text><Text numberOfLines={1} style={styles.itemMeta}>{[item.garment_type, item.primary_color, item.category].filter(Boolean).join(" · ") || "Details pending"}</Text></View></Pressable>;
+  return <Pressable onPress={onPress} style={[styles.itemCard, { width: columns <= 2 ? "47%" : `${Math.floor(100 / columns) - 2}%` }]}>{url ? <AuthenticatedImage url={item.cover_image?.url} style={styles.itemImage} /> : <View style={styles.itemImagePlaceholder}><Text style={styles.itemImagePlaceholderText}>W</Text></View>}<View style={styles.itemCopy}><StatusBadge compact status={item.status} statuses={statuses} /><Text numberOfLines={1} style={styles.itemName}>{item.name || item.garment_type || item.subcategory_label || "Clothing item"}</Text><Text numberOfLines={1} style={styles.itemMeta}>{[item.garment_type, item.primary_color, item.category_label].filter(Boolean).join(" · ") || "Details pending"}</Text></View></Pressable>;
 }
 
 function EmptyWardrobe({ onAdd }: { onAdd: () => void }) { return <View style={styles.emptyState}><View style={styles.emptyMark}><Text style={styles.emptyMarkText}>W</Text></View><Text style={styles.emptyTitle}>Build your wardrobe</Text><Text style={styles.emptyText}>Add a few pieces and WEARO will have the ingredients for your first outfit.</Text><Button onPress={onAdd} style={styles.emptyButton} title="Add your first item" /></View>; }
@@ -284,7 +292,7 @@ function Detail({ label, value }: { label: string; value: string | null | undefi
 function Notice({ title, text, tone = "info", loading = false }: { title: string; text: string; tone?: "info" | "error"; loading?: boolean }) { return <View style={[styles.notice, tone === "error" && styles.noticeError]}>{loading ? <ActivityIndicator color={colors.primary} /> : null}<View style={styles.noticeCopy}><Text style={styles.noticeTitle}>{title}</Text><Text style={styles.noticeText}>{text}</Text></View></View>; }
 function ErrorBanner({ message }: { message: string }) { return <View style={styles.errorBanner}><Text style={styles.errorText}>{message}</Text></View>; }
 function Loading({ label }: { label: string }) { return <View style={styles.loading}><ActivityIndicator color={colors.primary} /><Text style={styles.loadingText}>{label}</Text></View>; }
-function inputFromItem(item: ClothingItem): ClothingItemInput { return { name: item.name || "", garment_type: item.garment_type || "", category: item.category || "", subcategory: item.subcategory || "", primary_color: item.primary_color || "", secondary_colors: item.secondary_colors || [], pattern: item.pattern || "", material: item.material || "", fit: item.fit || "", season_tags: item.season_tags || [], occasion_tags: item.occasion_tags || [], style_tags: item.style_tags || [], cultural_tags: item.cultural_tags || [], formality_score: item.formality_score ? String(item.formality_score) : "" }; }
+function inputFromItem(item: ClothingItem): ClothingItemInput { return { name: item.name || "", garment_type: item.garment_type || "", category: item.category || "", subcategory: item.subcategory || "", primary_color: item.primary_color || "", secondary_colors: item.secondary_colors || [], pattern: item.pattern || "", material: item.material || "", fit: item.fit || "", season_tags: item.season_tags || [], occasion_tags: item.occasion_tags || [], style_tags: item.style_tags || [], cultural_tags: item.cultural_tags || [], formality_score: item.formality_score ? String(item.formality_score) : "", user_usage_tags: item.user_usage_tags || [], use_ai_usage_tags: item.user_usage_tags == null }; }
 function itemDisplayName(item: ClothingItem, metadata: ReturnType<typeof useAppData>["metadata"]) {
   return item.name?.trim() || item.garment_type?.trim() || subcategoryLabel(metadata?.clothing_items.categories || [], item.subcategory) || labelFor(metadata?.clothing_items.categories || [], item.category) || "Wardrobe item";
 }
@@ -292,6 +300,7 @@ function humanize(value: string) { return value.replaceAll("_", " ").replace(/\b
 function toggle(values: string[], value: string) { return values.includes(value) ? values.filter((item) => item !== value) : [...values, value]; }
 function labelFor(options: MetadataOption[], key?: string | null) { return options.find((option) => option.key === key)?.label || key || ""; }
 function subcategoryLabel(categories: Array<MetadataOption & { subcategories: MetadataOption[] }>, key?: string | null) { return categories.flatMap((category) => category.subcategories).find((option) => option.key === key)?.label || key || ""; }
+function usageLabels(item: ClothingItem, options: MetadataOption[]) { return item.effective_usage_tag_labels || (item.effective_usage_tags || []).map((key) => options.find((option) => option.key === key)?.label).filter((label): label is string => Boolean(label)); }
 function messageFor(error: unknown) { return error instanceof Error ? error.message : "Something went wrong. Please try again."; }
 function isItemProcessing(item: ClothingItem) { return ["uploaded", "processing"].includes(item.status) || ["queued", "processing"].includes(item.image_polish?.status); }
 
@@ -305,4 +314,5 @@ const styles = StyleSheet.create({
   detailLayout: { alignItems: "flex-start", flexDirection: "row", flexWrap: "wrap", gap: spacing.xl }, detailImageFrame: { aspectRatio: 0.9, flex: 1, minWidth: 280, overflow: "hidden" }, detailImage: { borderRadius: radius.lg, height: "100%", width: "100%" }, detailCard: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, borderWidth: 1, flex: 1, gap: spacing.lg, minWidth: 300, padding: spacing.xl }, detailSectionTitle: { ...typography.heading, color: colors.text }, detailGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md }, detail: { gap: spacing.xxs, width: "46%" }, detailLabel: { ...typography.caption, color: colors.textMuted }, detailValue: { ...typography.body, color: colors.text, textTransform: "capitalize" }, detailActions: { gap: spacing.sm }, deleteText: { ...typography.button, color: colors.error, padding: spacing.sm, textAlign: "center" },
   statusBadge: { alignItems: "center", alignSelf: "flex-start", borderRadius: radius.pill, flexDirection: "row", gap: spacing.xxs, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs }, statusBadgeCompact: { paddingHorizontal: spacing.xs, paddingVertical: 3 }, statusDot: { borderRadius: radius.pill, height: 7, width: 7 }, statusText: { ...typography.caption, textTransform: "capitalize" }, notice: { alignItems: "center", backgroundColor: "#EEF3FF", borderRadius: radius.md, flexDirection: "row", gap: spacing.sm, padding: spacing.md }, noticeCopy: { flex: 1, gap: spacing.xxs }, noticeError: { backgroundColor: "#FFF0ED" }, noticeTitle: { ...typography.button, color: colors.text }, noticeText: { ...typography.caption, color: colors.textMuted, fontWeight: "500" },
   confirmBox: { backgroundColor: "#FFF5F3", borderRadius: radius.md, gap: spacing.sm, padding: spacing.md }, confirmTitle: { ...typography.subheading, color: colors.text }, confirmText: { ...typography.body, color: colors.textMuted }, errorBanner: { backgroundColor: "#FFF0ED", borderRadius: radius.md, padding: spacing.md }, errorText: { ...typography.caption, color: colors.error }, loading: { alignItems: "center", gap: spacing.sm, padding: spacing.xxxl }, loadingText: { ...typography.body, color: colors.textMuted }, loadMore: { alignSelf: "center", marginTop: spacing.xl, minWidth: 160 }
+  ,aiUsageToggle: { alignItems: "center", flexDirection: "row", gap: spacing.sm }, usageCheckbox: { alignItems: "center", borderColor: colors.border, borderRadius: 5, borderWidth: 1, height: 23, justifyContent: "center", width: 23 }, usageCheckboxActive: { backgroundColor: colors.primary, borderColor: colors.primary }, usageCheck: { color: "#FFFFFF", fontSize: 14, fontWeight: "800" }, usageHelp: { ...typography.caption, color: colors.textMuted, fontWeight: "500" }
 });

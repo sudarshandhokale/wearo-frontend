@@ -1,15 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { Send, Sparkles } from "lucide-react-native";
+import { ActivityIndicator, NativeScrollEvent, NativeSyntheticEvent, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock3, Send, Sparkles } from "lucide-react-native";
 
 import { ApiError } from "../api/ApiError";
 import { AppService } from "../api/AppService";
-import type { ContextualSuggestion, MetadataOption, Outfit, RecommendationErrorDetails, RecommendationRequest, StylingPlan } from "../api/types";
+import type { ContextualSuggestion, MetadataOption, Outfit, RecommendationErrorDetails, RecommendationRequest, RoutineIntentResponse, StylingPlan } from "../api/types";
 import { Button } from "../components/Button";
 import { OutfitCover } from "../components/OutfitCover";
 import { OutfitDetail } from "../components/OutfitDetail";
 import { ScreenContainer } from "../components/ScreenContainer";
 import { StylingPlanDetail } from "../components/StylingPlans";
+import { RoutineDraftReview } from "../components/StylingRoutines";
 import { WearoMark } from "../components/WearoLogo";
 import { useAppData } from "../context/AppDataContext";
 import { useResponsive } from "../hooks/useResponsive";
@@ -17,9 +18,9 @@ import { copy } from "../localization/en";
 import type { Navigate } from "../navigation/types";
 import { colors, radius, shadows, spacing, typography } from "../theme";
 
-type StylistView = "prompt" | "results" | "detail" | "plan";
+type StylistView = "prompt" | "results" | "detail" | "plan" | "routine_drafts";
 
-export function AskWearoScreen({ initialRequest, onNavigate }: { initialRequest: { id: number; prompt: string; autoSend: boolean } | null; onNavigate: Navigate }) {
+export function AskWearoScreen({ initialRequest, onNavigate }: { initialRequest: { id: number; prompt?: string; autoSend: boolean; recommendationRequestId?: number | string } | null; onNavigate: Navigate }) {
   const { metadata } = useAppData();
   const { isMobile } = useResponsive();
   const [view, setView] = useState<StylistView>("prompt");
@@ -28,9 +29,14 @@ export function AskWearoScreen({ initialRequest, onNavigate }: { initialRequest:
   const [selected, setSelected] = useState<Outfit | null>(null);
   const [recommendation, setRecommendation] = useState<RecommendationRequest | null>(null);
   const [plan, setPlan] = useState<StylingPlan | null>(null);
+  const [routineIntent, setRoutineIntent] = useState<RoutineIntentResponse | null>(null);
   const [contextualSuggestions, setContextualSuggestions] = useState<ContextualSuggestion[]>([]);
   const [recommendationContext, setRecommendationContext] = useState<Record<string, unknown>>({});
   const [missingRoles, setMissingRoles] = useState<string[]>([]);
+  const [showStylingDetails, setShowStylingDetails] = useState(false);
+  const [recentRequests, setRecentRequests] = useState<RecommendationRequest[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [visibleOutfitIndex, setVisibleOutfitIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const consumedRequest = useRef<number | null>(null);
@@ -40,9 +46,21 @@ export function AskWearoScreen({ initialRequest, onNavigate }: { initialRequest:
   useEffect(() => {
     if (!initialRequest || consumedRequest.current === initialRequest.id) return;
     consumedRequest.current = initialRequest.id;
-    setPrompt(initialRequest.prompt);
-    if (initialRequest.autoSend) void submit(initialRequest.prompt);
+    if (initialRequest.recommendationRequestId != null) {
+      void loadRecentRequest(initialRequest.recommendationRequestId);
+      return;
+    }
+    if (initialRequest.prompt) {
+      setPrompt(initialRequest.prompt);
+      if (initialRequest.autoSend) void submit(initialRequest.prompt);
+    }
   }, [initialRequest]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void AppService.recommendationRequests(1, 4).then((response) => { if (!cancelled) setRecentRequests(response.data); }).catch(() => undefined).finally(() => { if (!cancelled) setHistoryLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
 
   async function submit(message = prompt) {
     const normalizedPrompt = message.trim();
@@ -64,10 +82,19 @@ export function AskWearoScreen({ initialRequest, onNavigate }: { initialRequest:
       }
 
       const response = await AppService.recommendations(normalizedPrompt);
-      setOutfits(response.data.outfits);
-      setRecommendation(response.data.recommendation);
-      setRecommendationContext(response.data.context || {});
-      setContextualSuggestions(response.data.suggestions || []);
+      const responseData = response.data;
+      if ("routine_drafts" in responseData) {
+        setRoutineIntent(responseData);
+        setView("routine_drafts");
+        return;
+      }
+      setOutfits(responseData.outfits);
+      setRecommendation(responseData.recommendation);
+      setRecommendationContext(responseData.context || {});
+      setContextualSuggestions(responseData.suggestions || []);
+      setShowStylingDetails(false);
+      setVisibleOutfitIndex(0);
+      setRecentRequests((current) => [responseData.recommendation, ...current.filter((item) => item.id !== responseData.recommendation.id)].slice(0, 4));
       setView("results");
     } catch (caughtError) {
       setError(messageFor(caughtError));
@@ -84,6 +111,10 @@ export function AskWearoScreen({ initialRequest, onNavigate }: { initialRequest:
     return <ScreenContainer><StylingPlanDetail onBack={() => { setPlan(null); setView("prompt"); }} plan={plan} roles={roles} /></ScreenContainer>;
   }
 
+  if (view === "routine_drafts" && routineIntent) {
+    return <ScreenContainer><RoutineDraftReview drafts={routineIntent.routine_drafts} message={routineIntent.message} metadata={metadata?.routines} onCancel={() => { setRoutineIntent(null); setView("prompt"); }} onSaved={() => { setRoutineIntent(null); setPrompt(""); setView("prompt"); }} /></ScreenContainer>;
+  }
+
   async function openOutfit(outfit: Outfit) {
     setIsLoading(true);
     setError(null);
@@ -91,6 +122,31 @@ export function AskWearoScreen({ initialRequest, onNavigate }: { initialRequest:
       const response = await AppService.outfit(outfit.id);
       setSelected(response.data);
       setView("detail");
+    } catch (caughtError) {
+      setError(messageFor(caughtError));
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function openRecentRequest(request: RecommendationRequest) {
+    if (request.status !== "completed") return;
+    await loadRecentRequest(request.id);
+  }
+
+  async function loadRecentRequest(requestId: RecommendationRequest["id"]) {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await AppService.recommendationRequest(requestId);
+      setPrompt(response.data.prompt);
+      setRecommendation(response.data);
+      setRecommendationContext(response.data.context || {});
+      setContextualSuggestions([]);
+      setOutfits(response.data.outfits || []);
+      setShowStylingDetails(false);
+      setVisibleOutfitIndex(0);
+      setView("results");
     } catch (caughtError) {
       setError(messageFor(caughtError));
     } finally {
@@ -120,21 +176,16 @@ export function AskWearoScreen({ initialRequest, onNavigate }: { initialRequest:
       <View style={styles.pageHeader}>
         {view === "results" ? <BackButton onPress={() => setView("prompt")} /> : null}
         <View style={styles.headerCopy}>
-          <Text style={styles.title}>{view === "results" ? copy.stylist.resultsTitle : copy.stylist.title}</Text>
-          <Text style={styles.subtitle}>{view === "results" ? copy.stylist.resultsSubtitle : copy.stylist.subtitle}</Text>
+          <Text style={[styles.title, view === "results" && styles.resultsTitle]}>{view === "results" ? `${outfits.length} outfit ${outfits.length === 1 ? "option" : "options"}` : copy.stylist.title}</Text>
+          <Text style={styles.subtitle}>{view === "results" ? "Choose a look to see every piece and why it works." : copy.stylist.subtitle}</Text>
         </View>
       </View>
 
       {view === "prompt" ? (
         <View style={styles.chatShell}>
           <View style={styles.conversation}>
-            <AssistantMessage>
-              <Text style={styles.assistantTitle}>Hi, I'm WEARO, your personal stylist.</Text>
-              <Text style={styles.messageText}>Tell me what you're dressing for, where you're going, or the kind of look you want. I'll build outfits from your wardrobe.</Text>
-            </AssistantMessage>
-            <View style={styles.suggestions}>
-              {suggestedPrompts.map((suggestion) => <Pressable disabled={isLoading} key={suggestion} onPress={() => { setPrompt(suggestion); void submit(suggestion); }} style={({ pressed }) => [styles.suggestion, pressed && styles.pressed]}><Text style={styles.suggestionText}>{suggestion}</Text></Pressable>)}
-            </View>
+            <View style={styles.welcomeRow}><View style={styles.welcomeIcon}><Sparkles color={colors.primary} size={20} /></View><View style={styles.welcomeCopy}><Text style={styles.assistantTitle}>What are you dressing for?</Text><Text style={styles.messageText}>Share an occasion, place, weather, or plan. I’ll style options from your wardrobe.</Text></View></View>
+            <View style={styles.quickPrompts}><Text style={styles.quickPromptsLabel}>TRY A PROMPT</Text><View style={[styles.suggestions, isMobile && styles.mobileSuggestions]}>{suggestedPrompts.map((suggestion) => <Pressable disabled={isLoading} key={suggestion} onPress={() => { setPrompt(suggestion); void submit(suggestion); }} style={({ pressed }) => [styles.suggestion, isMobile && styles.mobileSuggestion, pressed && styles.pressed]}><Sparkles color={colors.primary} size={15} /><Text numberOfLines={isMobile ? 2 : 1} style={styles.suggestionText}>{suggestion}</Text><ChevronRight color={colors.textSoft} size={17} /></Pressable>)}</View></View>
             {isLoading ? <><View style={styles.userMessage}><Text style={styles.userMessageText}>{prompt}</Text></View><AssistantMessage compact><View style={styles.typingRow}><ActivityIndicator color={colors.primary} size="small" /><Text style={styles.typingText}>Looking through your wardrobe and styling your options…</Text></View></AssistantMessage></> : null}
             {error ? <AssistantMessage compact><Text style={styles.errorMessageText}>{error}</Text>{missingRoles.length ? <><Text style={styles.messageText}>{copy.stylist.incompleteTitle}</Text><View style={styles.missingRoles}>{missingRoles.map((role) => <Badge key={role} label={labelFor(roles, role)} />)}</View><Button onPress={() => onNavigate("wardrobe")} title={copy.stylist.addClothing} variant="secondary" /></> : null}</AssistantMessage> : null}
           </View>
@@ -142,33 +193,16 @@ export function AskWearoScreen({ initialRequest, onNavigate }: { initialRequest:
             <TextInput accessibilityLabel="Message WEARO" editable={!isLoading} multiline onChangeText={setPrompt} onSubmitEditing={() => { if (prompt.trim() && !isLoading) void submit(); }} placeholder="Ask what to wear…" placeholderTextColor={colors.textSoft} returnKeyType="send" style={styles.composerInput} value={prompt} />
             <Pressable accessibilityLabel="Send message" accessibilityRole="button" disabled={!prompt.trim() || isLoading} onPress={() => void submit()} style={({ pressed }) => [styles.sendButton, (!prompt.trim() || isLoading) && styles.sendButtonDisabled, pressed && styles.pressed]}>{isLoading ? <ActivityIndicator color={colors.surface} size="small" /> : <Send color={colors.surface} size={20} />}</Pressable>
           </View>
+          <View style={styles.recentSection}><View style={styles.recentHeader}><View><Text style={styles.sectionTitle}>Recent requests</Text><Text style={styles.recentSubtitle}>Continue where you left off</Text></View><Pressable accessibilityRole="button" onPress={() => onNavigate("history")}><Text style={styles.viewAll}>View all</Text></Pressable></View>{historyLoading ? <View style={styles.recentLoading}><ActivityIndicator color={colors.primary} size="small" /><Text style={styles.recentSubtitle}>Loading history</Text></View> : recentRequests.length ? <View style={styles.recentList}>{recentRequests.map((request) => <RecentRequestRow key={request.id} onPress={() => void openRecentRequest(request)} request={request} />)}</View> : <Text style={styles.recentEmpty}>Your previous styling requests will appear here.</Text>}</View>
         </View>
       ) : (
         <>
           {error ? <ErrorBanner message={error} /> : null}
-          <View style={styles.resultConversation}><View style={styles.userMessage}><Text style={styles.userMessageText}>{prompt}</Text></View><AssistantMessage compact><Text style={styles.assistantTitle}>I found {outfits.length} {outfits.length === 1 ? "look" : "looks"} for you.</Text><Text style={styles.messageText}>Open any option to see why it works, save it, or tell me if you wore it.</Text></AssistantMessage></View>
-          {recommendation?.ranking_source === "deterministic" ? <View style={styles.infoBanner}><Text style={styles.infoBannerText}>These recommendations were created from your wardrobe and preferences.</Text></View> : null}
-          <ContextSummary context={recommendationContext} />
-          {contextualSuggestions.length ? <View style={styles.contextualSuggestions}><Text style={styles.sectionTitle}>A few things to consider</Text>{contextualSuggestions.map((suggestion) => <View key={suggestion.key} style={styles.contextualSuggestion}><View style={styles.suggestionCopy}><Text style={styles.suggestionPriority}>{suggestion.priority.toUpperCase()} · {suggestion.type.toUpperCase()}</Text><Text style={styles.suggestionMessage}>{suggestion.message}</Text>{suggestion.question ? <Text style={styles.suggestionQuestion}>{suggestion.question}</Text> : null}</View>{suggestion.clothing_item_id != null ? <Button onPress={() => onNavigate("wardrobe", { clothingItemId: suggestion.clothing_item_id! })} title="View item" variant="secondary" /> : suggestion.action === "add_to_wardrobe" ? <Button onPress={() => onNavigate("wardrobe")} title="Open wardrobe" variant="secondary" /> : null}</View>)}</View> : null}
+          <View style={styles.resultSummary}><View style={styles.resultSummaryIcon}><Sparkles color={colors.primary} size={19} /></View><View style={styles.resultSummaryCopy}><Text style={styles.resultEyebrow}>STYLED FOR</Text><Text numberOfLines={2} style={styles.resultPrompt}>{prompt}</Text><Text style={styles.resultSummaryText}>Built from your wardrobe and style preferences.</Text></View></View>
           {isLoading ? <LoadingState /> : null}
-          <View style={styles.resultsGrid}>
-            {outfits.map((outfit) => (
-              <Pressable
-                accessibilityRole="button"
-                key={outfit.id}
-                onPress={() => void openOutfit(outfit)}
-                style={({ pressed }) => [styles.outfitCard, pressed && styles.pressed]}
-              >
-                <View style={styles.outfitCardHeader}>
-                  <Text numberOfLines={1} style={styles.outfitNumber}>{outfit.name}</Text>
-                  {outfit.recommendation_score != null ? <Text style={styles.score}>{Math.round(outfit.recommendation_score)}% match</Text> : null}
-                </View>
-                <OutfitGallery outfit={outfit} roles={roles} />
-                <Text numberOfLines={3} style={styles.body}>{outfit.explanation}</Text>
-                <Text style={styles.detailLink}>View outfit details</Text>
-              </Pressable>
-            ))}
-          </View>
+          {isMobile ? <View style={styles.mobileResults}><View style={styles.railHeader}><Text style={styles.railTitle}>Your options</Text><Text style={styles.railCount}>{Math.min(visibleOutfitIndex + 1, outfits.length)} of {outfits.length} · Swipe to compare</Text></View><ScrollView accessibilityLabel={`${outfits.length} outfit options. Swipe horizontally to compare.`} contentContainerStyle={styles.mobileResultsRail} decelerationRate="fast" disableIntervalMomentum horizontal onMomentumScrollEnd={(event) => setVisibleOutfitIndex(outfitIndexFromScroll(event, outfits.length))} showsHorizontalScrollIndicator={false} snapToAlignment="start" snapToInterval={302}>{outfits.map((outfit) => <ResultOutfitCard key={outfit.id} mobile onPress={() => void openOutfit(outfit)} outfit={outfit} roles={roles} />)}</ScrollView><View accessibilityLabel={`Outfit ${visibleOutfitIndex + 1} of ${outfits.length}`} style={styles.railDots}>{outfits.map((outfit, index) => <View key={outfit.id} style={[styles.railDot, index === visibleOutfitIndex && styles.railDotActive]} />)}</View></View> : <View style={styles.resultsGrid}>{outfits.map((outfit) => <ResultOutfitCard key={outfit.id} onPress={() => void openOutfit(outfit)} outfit={outfit} roles={roles} />)}</View>}
+          <Pressable accessibilityRole="button" onPress={() => setShowStylingDetails((value) => !value)} style={styles.detailsToggle}><View><Text style={styles.detailsToggleTitle}>Styling details</Text><Text style={styles.detailsToggleSubtitle}>Context and practical notes for these looks</Text></View>{showStylingDetails ? <ChevronUp color={colors.primary} size={20} /> : <ChevronDown color={colors.primary} size={20} />}</Pressable>
+          {showStylingDetails ? <View style={styles.detailsContent}>{recommendation?.ranking_source === "deterministic" ? <View style={styles.infoBanner}><Text style={styles.infoBannerText}>These recommendations were created from your wardrobe and preferences.</Text></View> : null}<ContextSummary context={recommendationContext} />{contextualSuggestions.length ? <View style={styles.contextualSuggestions}><Text style={styles.sectionTitle}>Things to consider</Text>{contextualSuggestions.map((suggestion) => <View key={suggestion.key} style={styles.contextualSuggestion}><View style={styles.suggestionCopy}>{suggestion.priority_label || suggestion.type_label ? <Text style={styles.suggestionPriority}>{[suggestion.priority_label, suggestion.type_label].filter(Boolean).join(" · ")}</Text> : null}<Text style={styles.suggestionMessage}>{suggestion.message}</Text>{suggestion.question ? <Text style={styles.suggestionQuestion}>{suggestion.question}</Text> : null}</View>{suggestion.clothing_item_id != null ? <Button onPress={() => onNavigate("wardrobe", { clothingItemId: suggestion.clothing_item_id! })} title="View item" variant="secondary" /> : suggestion.action === "add_to_wardrobe" ? <Button onPress={() => onNavigate("wardrobe")} title="Open wardrobe" variant="secondary" /> : null}</View>)}</View> : null}</View> : null}
           <Button onPress={() => setView("prompt")} style={styles.tryAgainButton} title={copy.stylist.tryAgain} variant="secondary" />
         </>
       )}
@@ -194,26 +228,40 @@ function OutfitGallery({ outfit, roles, large = false }: { outfit: Outfit; roles
   return <View style={[styles.gallery, large && styles.largeGallery]}><OutfitCover coverImages={outfit.cover_images} style={styles.outfitCover} /></View>;
 }
 
+function ResultOutfitCard({ mobile = false, onPress, outfit, roles }: { mobile?: boolean; onPress: () => void; outfit: Outfit; roles: MetadataOption[] }) {
+  const context = outfit.occasion_label || contextLabel(outfit.context, "occasion") || contextLabel(outfit.context, "activity");
+  return <Pressable accessibilityLabel={`View ${outfit.name}`} accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.outfitCard, mobile && styles.mobileOutfitCard, pressed && styles.pressed]}><View style={styles.cardVisual}><OutfitGallery outfit={outfit} roles={roles} />{outfit.recommendation_score != null ? <View style={styles.scoreBadge}><Text style={styles.scoreBadgeText}>{Math.round(outfit.recommendation_score)}% match</Text></View> : null}</View><View style={styles.outfitCardCopy}><Text numberOfLines={2} style={styles.outfitNumber}>{outfit.name}</Text>{context ? <Text style={styles.outfitContext}>{context}</Text> : null}<Text numberOfLines={2} style={styles.cardExplanation}>{outfit.explanation}</Text><View style={styles.cardAction}><Text style={styles.detailLink}>See outfit details</Text><ChevronRight color={colors.primary} size={18} /></View></View></Pressable>;
+}
+
+function RecentRequestRow({ onPress, request }: { onPress: () => void; request: RecommendationRequest }) {
+  const enabled = request.status === "completed";
+  return <Pressable accessibilityLabel={`${request.prompt}, ${request.status_label || request.status}`} accessibilityRole="button" disabled={!enabled} onPress={onPress} style={({ pressed }) => [styles.recentRow, !enabled && styles.recentRowDisabled, pressed && styles.pressed]}><View style={styles.recentIcon}><Clock3 color={colors.primary} size={17} /></View><View style={styles.recentCopy}><Text numberOfLines={1} style={styles.recentPrompt}>{request.prompt}</Text><Text style={styles.recentMeta}>{relativeDate(request.created_at)} · {request.outfits?.length || 0} {request.outfits?.length === 1 ? "look" : "looks"}</Text></View><View style={[styles.recentStatus, request.status === "failed" && styles.recentStatusFailed]}><Text style={[styles.recentStatusText, request.status === "failed" && styles.recentStatusFailedText]}>{request.status_label || ""}</Text></View>{enabled ? <ChevronRight color={colors.textSoft} size={18} /> : null}</Pressable>;
+}
+
 function BackButton({ onPress }: { onPress: () => void }) {
-  return <Pressable accessibilityLabel="Go back" onPress={onPress} style={styles.backButton}><Text style={styles.backSymbol}>‹</Text></Pressable>;
+  return <Pressable accessibilityLabel="Go back" onPress={onPress} style={styles.backButton}><ChevronLeft color={colors.text} size={22} /></Pressable>;
 }
 function Badge({ label }: { label: string }) { return <View style={styles.badge}><Text style={styles.badgeText}>{label}</Text></View>; }
-function ContextSummary({ context }: { context: Record<string, unknown> }) { const entries = Object.entries(context).filter(([, value]) => typeof value === "string" || typeof value === "number").slice(0, 5); return entries.length ? <View style={styles.contextSummary}><Text style={styles.sectionTitle}>Plan context</Text><View style={styles.contextValues}>{entries.map(([key, value]) => <Info key={key} label={key.replaceAll("_", " ")} value={String(value)} />)}</View></View> : null; }
+function ContextSummary({ context }: { context: Record<string, unknown> }) { const entries = ["activity", "occasion", "formality"].flatMap((key) => { const value = context[`${key}_label`]; return typeof value === "string" ? [[key, value] as const] : []; }); return entries.length ? <View style={styles.contextSummary}><Text style={styles.sectionTitle}>Plan context</Text><View style={styles.contextValues}>{entries.map(([key, value]) => <Info key={key} label={key} value={value} />)}</View></View> : null; }
 function Info({ label, value }: { label: string; value: string }) { return <View style={styles.info}><Text style={styles.infoLabel}>{label}</Text><Text style={styles.infoValue}>{value}</Text></View>; }
 function ErrorBanner({ message }: { message: string }) { return <View style={styles.errorBanner}><Text style={styles.errorText}>{message}</Text></View>; }
 function LoadingState() { return <View style={styles.inlineLoading}><ActivityIndicator color={colors.primary} /><Text style={styles.loadingText}>Loading outfit details</Text></View>; }
 function labelFor(options: MetadataOption[], key: string | null) { return options.find((option) => option.key === key)?.label || key?.replaceAll("_", " ") || copy.common.notSet; }
-function formatLocalDate(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(date); }
+function textContext(context: Record<string, unknown>, key: string) { return typeof context[key] === "string" ? context[key] as string : null; }
+function contextLabel(context: Record<string, unknown>, key: string) { return typeof context[`${key}_label`] === "string" ? context[`${key}_label`] as string : null; }
+function humanize(value: string) { return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()); }
+function relativeDate(value: string) { const parsed = new Date(value); if (Number.isNaN(parsed.getTime())) return value; const difference = Date.now() - parsed.getTime(); const days = Math.floor(difference / 86400000); if (days <= 0) return "Today"; if (days === 1) return "Yesterday"; if (days < 7) return `${days} days ago`; return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(parsed); }
+function outfitIndexFromScroll(event: NativeSyntheticEvent<NativeScrollEvent>, count: number) { return Math.max(0, Math.min(count - 1, Math.round(event.nativeEvent.contentOffset.x / 302))); }
 function messageFor(error: unknown) { return error instanceof Error ? error.message : "Something went wrong. Please try again."; }
 
 const styles = StyleSheet.create({
-  pageHeader: { alignItems: "center", flexDirection: "row", gap: spacing.md, marginBottom: spacing.xl }, headerCopy: { flex: 1, gap: spacing.xs }, title: { ...typography.display, color: colors.text }, subtitle: { ...typography.body, color: colors.textMuted },
-  chatShell: { ...shadows.soft, alignSelf: "center", backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, borderWidth: 1, maxWidth: 860, padding: spacing.xl, width: "100%" }, conversation: { gap: spacing.lg, minHeight: 350, paddingBottom: spacing.xl }, assistantRow: { alignItems: "flex-start", flexDirection: "row", gap: spacing.sm, maxWidth: 680 }, stylistAvatar: { alignItems: "center", backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.pill, borderWidth: 1, height: 48, justifyContent: "center", overflow: "hidden", width: 48 }, assistantMessage: { backgroundColor: colors.surfaceMuted, borderRadius: radius.lg, borderTopLeftRadius: 4, flexShrink: 1, gap: spacing.sm, padding: spacing.lg }, assistantMessageCompact: { padding: spacing.md }, stylistLabel: { alignItems: "center", flexDirection: "row", gap: spacing.xxs }, stylistLabelText: { ...typography.caption, color: colors.primary, fontSize: 10 }, assistantTitle: { ...typography.subheading, color: colors.text }, messageText: { ...typography.body, color: colors.textMuted }, suggestions: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs, marginLeft: 60 }, suggestion: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.pill, borderWidth: 1, minHeight: 40, justifyContent: "center", paddingHorizontal: spacing.md }, suggestionText: { ...typography.caption, color: colors.primary }, userMessage: { alignSelf: "flex-end", backgroundColor: colors.primary, borderRadius: radius.lg, borderBottomRightRadius: 4, maxWidth: "78%", paddingHorizontal: spacing.lg, paddingVertical: spacing.md }, userMessageText: { ...typography.body, color: colors.surface }, typingRow: { alignItems: "center", flexDirection: "row", gap: spacing.sm }, typingText: { ...typography.caption, color: colors.textMuted }, errorMessageText: { ...typography.body, color: colors.error }, composer: { alignItems: "flex-end", backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, borderWidth: 1, flexDirection: "row", gap: spacing.sm, padding: spacing.xs }, composerInput: { ...typography.body, color: colors.text, flex: 1, maxHeight: 128, minHeight: 50, outlineStyle: "none", paddingHorizontal: spacing.md, paddingVertical: spacing.sm, textAlignVertical: "center" } as never, sendButton: { alignItems: "center", backgroundColor: colors.primary, borderRadius: radius.pill, height: 46, justifyContent: "center", width: 46 }, sendButtonDisabled: { opacity: 0.45 }, resultConversation: { gap: spacing.md, marginBottom: spacing.xl }, contextSummary: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, gap: spacing.sm, marginBottom: spacing.xl, padding: spacing.lg }, contextValues: { flexDirection: "row", flexWrap: "wrap", gap: spacing.lg }, contextualSuggestions: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, gap: spacing.sm, marginBottom: spacing.xl, padding: spacing.lg }, contextualSuggestion: { alignItems: "center", borderTopColor: colors.border, borderTopWidth: 1, flexDirection: "row", flexWrap: "wrap", gap: spacing.md, paddingTop: spacing.md }, suggestionCopy: { flex: 1, gap: spacing.xs, minWidth: 220 }, suggestionPriority: { ...typography.caption, color: colors.primary, fontSize: 10 }, suggestionMessage: { ...typography.body, color: colors.text }, suggestionQuestion: { ...typography.caption, color: colors.textMuted },
+  pageHeader: { alignItems: "center", flexDirection: "row", gap: spacing.md, marginBottom: spacing.xl }, headerCopy: { flex: 1, gap: spacing.xs }, title: { ...typography.display, color: colors.text }, resultsTitle: { ...typography.heading }, subtitle: { ...typography.body, color: colors.textMuted },
+  chatShell: { ...shadows.soft, alignSelf: "center", backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, borderWidth: 1, gap: spacing.lg, maxWidth: 860, padding: spacing.xl, width: "100%" }, conversation: { gap: spacing.lg }, welcomeRow: { alignItems: "flex-start", flexDirection: "row", gap: spacing.sm }, welcomeIcon: { alignItems: "center", backgroundColor: "#EFECFF", borderRadius: radius.md, height: 44, justifyContent: "center", width: 44 }, welcomeCopy: { flex: 1, gap: spacing.xs }, quickPrompts: { gap: spacing.sm }, quickPromptsLabel: { ...typography.caption, color: colors.textSoft, fontSize: 10 }, assistantRow: { alignItems: "flex-start", flexDirection: "row", gap: spacing.sm, maxWidth: 680 }, stylistAvatar: { alignItems: "center", backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.pill, borderWidth: 1, height: 48, justifyContent: "center", overflow: "hidden", width: 48 }, assistantMessage: { backgroundColor: colors.surfaceMuted, borderRadius: radius.lg, borderTopLeftRadius: 4, flexShrink: 1, gap: spacing.sm, padding: spacing.lg }, assistantMessageCompact: { padding: spacing.md }, stylistLabel: { alignItems: "center", flexDirection: "row", gap: spacing.xxs }, stylistLabelText: { ...typography.caption, color: colors.primary, fontSize: 10 }, assistantTitle: { ...typography.subheading, color: colors.text }, messageText: { ...typography.body, color: colors.textMuted }, suggestions: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }, mobileSuggestions: { flexDirection: "column", flexWrap: "nowrap" }, suggestion: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radius.sm, flexDirection: "row", gap: spacing.sm, minHeight: 42, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }, mobileSuggestion: { width: "100%" }, suggestionText: { ...typography.caption, color: colors.text, flex: 1 }, userMessage: { alignSelf: "flex-end", backgroundColor: colors.primary, borderRadius: radius.lg, borderBottomRightRadius: 4, maxWidth: "78%", paddingHorizontal: spacing.lg, paddingVertical: spacing.md }, userMessageText: { ...typography.body, color: colors.surface }, typingRow: { alignItems: "center", flexDirection: "row", gap: spacing.sm }, typingText: { ...typography.caption, color: colors.textMuted }, errorMessageText: { ...typography.body, color: colors.error }, composer: { alignItems: "flex-end", backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, borderWidth: 1, flexDirection: "row", gap: spacing.sm, padding: spacing.xs }, composerInput: { ...typography.body, color: colors.text, flex: 1, maxHeight: 128, minHeight: 50, outlineStyle: "none", paddingHorizontal: spacing.md, paddingVertical: spacing.sm, textAlignVertical: "center" } as never, sendButton: { alignItems: "center", backgroundColor: colors.primary, borderRadius: radius.pill, height: 46, justifyContent: "center", width: 46 }, sendButtonDisabled: { opacity: 0.45 }, recentSection: { borderTopColor: colors.border, borderTopWidth: 1, gap: spacing.sm, paddingTop: spacing.lg }, recentHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" }, recentSubtitle: { ...typography.caption, color: colors.textMuted }, viewAll: { ...typography.caption, color: colors.primary }, recentLoading: { alignItems: "center", flexDirection: "row", gap: spacing.sm, paddingVertical: spacing.md }, recentList: { gap: spacing.xs }, recentRow: { alignItems: "center", borderRadius: radius.sm, flexDirection: "row", gap: spacing.sm, minHeight: 54, padding: spacing.sm }, recentRowDisabled: { opacity: 0.68 }, recentIcon: { alignItems: "center", backgroundColor: "#EFECFF", borderRadius: radius.sm, height: 34, justifyContent: "center", width: 34 }, recentCopy: { flex: 1, gap: spacing.xxs, minWidth: 0 }, recentPrompt: { ...typography.caption, color: colors.text, fontWeight: "700" }, recentMeta: { ...typography.caption, color: colors.textMuted, fontSize: 11 }, recentStatus: { backgroundColor: "#EAF8F0", borderRadius: radius.pill, paddingHorizontal: spacing.xs, paddingVertical: spacing.xxs }, recentStatusFailed: { backgroundColor: "#FFF0ED" }, recentStatusText: { ...typography.caption, color: colors.success, fontSize: 10 }, recentStatusFailedText: { color: colors.error }, recentEmpty: { ...typography.caption, color: colors.textMuted, paddingVertical: spacing.sm }, resultConversation: { gap: spacing.md, marginBottom: spacing.xl }, contextSummary: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, gap: spacing.sm, marginBottom: spacing.xl, padding: spacing.lg }, contextValues: { flexDirection: "row", flexWrap: "wrap", gap: spacing.lg }, contextualSuggestions: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, gap: spacing.sm, marginBottom: spacing.xl, padding: spacing.lg }, contextualSuggestion: { alignItems: "center", borderTopColor: colors.border, borderTopWidth: 1, flexDirection: "row", flexWrap: "wrap", gap: spacing.md, paddingTop: spacing.md }, suggestionCopy: { flex: 1, gap: spacing.xs, minWidth: 220 }, suggestionPriority: { ...typography.caption, color: colors.primary, fontSize: 10 }, suggestionMessage: { ...typography.body, color: colors.text }, suggestionQuestion: { ...typography.caption, color: colors.textMuted },
   loadingPanel: { alignItems: "center", backgroundColor: "#F0EEFF", borderRadius: radius.lg, flex: 0.8, gap: spacing.sm, minWidth: 260, padding: spacing.xxxl }, loadingTitle: { ...typography.heading, color: colors.text, textAlign: "center" }, loadingText: { ...typography.body, color: colors.textMuted, textAlign: "center" },
   incompletePanel: { backgroundColor: "#FFF8E8", borderColor: "#F4D999", borderRadius: radius.md, borderWidth: 1, gap: spacing.md, padding: spacing.md }, missingRoles: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs },
-  resultsGrid: { alignItems: "stretch", flexDirection: "row", flexWrap: "wrap", gap: spacing.lg }, outfitCard: { ...shadows.soft, backgroundColor: colors.surface, borderRadius: radius.md, flexGrow: 1, gap: spacing.md, minWidth: 280, padding: spacing.lg, width: "31%" }, outfitCardHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" }, outfitNumber: { ...typography.caption, color: colors.primary }, score: { ...typography.caption, color: colors.textMuted, fontWeight: "600" }, detailLink: { ...typography.button, color: colors.primary }, tryAgainButton: { alignSelf: "center", marginTop: spacing.xl, minWidth: 220 },
+  resultSummary: { alignItems: "center", backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, flexDirection: "row", gap: spacing.sm, marginBottom: spacing.lg, padding: spacing.md }, resultSummaryIcon: { alignItems: "center", backgroundColor: "#EFECFF", borderRadius: radius.md, height: 42, justifyContent: "center", width: 42 }, resultSummaryCopy: { flex: 1, gap: spacing.xxs }, resultEyebrow: { ...typography.caption, color: colors.primary, fontSize: 10 }, resultPrompt: { ...typography.button, color: colors.text }, resultSummaryText: { ...typography.caption, color: colors.textMuted }, resultsGrid: { alignItems: "stretch", flexDirection: "row", flexWrap: "wrap", gap: spacing.lg }, mobileResults: { gap: spacing.sm }, railHeader: { alignItems: "center", flexDirection: "row", gap: spacing.sm, justifyContent: "space-between" }, railTitle: { ...typography.subheading, color: colors.text }, railCount: { ...typography.caption, color: colors.textMuted }, mobileResultsRail: { gap: spacing.md, paddingBottom: spacing.sm, paddingRight: spacing.xl }, railDots: { alignItems: "center", flexDirection: "row", gap: spacing.xs, justifyContent: "center" }, railDot: { backgroundColor: colors.border, borderRadius: radius.pill, height: 7, width: 7 }, railDotActive: { backgroundColor: colors.primary, width: 22 }, outfitCard: { ...shadows.soft, backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, flexGrow: 1, minWidth: 260, overflow: "hidden", width: "31%" }, mobileOutfitCard: { flexGrow: 0, minWidth: 0, width: 286 }, cardVisual: { position: "relative" }, scoreBadge: { backgroundColor: colors.surface, borderRadius: radius.pill, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, position: "absolute", right: spacing.sm, top: spacing.sm }, scoreBadgeText: { ...typography.caption, color: colors.primary }, outfitCardCopy: { gap: spacing.xs, padding: spacing.md }, outfitNumber: { ...typography.subheading, color: colors.text }, outfitContext: { ...typography.caption, color: colors.primary }, cardExplanation: { ...typography.caption, color: colors.textMuted, minHeight: 38 }, cardAction: { alignItems: "center", flexDirection: "row", gap: spacing.xs, justifyContent: "space-between", marginTop: spacing.xs }, detailLink: { ...typography.button, color: colors.primary }, detailsToggle: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, borderTopColor: colors.border, borderTopWidth: 1, flexDirection: "row", gap: spacing.md, justifyContent: "space-between", marginTop: spacing.xl, paddingVertical: spacing.md }, detailsToggleTitle: { ...typography.subheading, color: colors.text }, detailsToggleSubtitle: { ...typography.caption, color: colors.textMuted }, detailsContent: { marginTop: spacing.lg }, tryAgainButton: { alignSelf: "center", marginTop: spacing.xl, minWidth: 220 },
   gallery: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }, largeGallery: { flex: 1.3, minWidth: 300 }, outfitCover: { aspectRatio: 1, backgroundColor: colors.surfaceMuted, borderRadius: radius.md, width: "100%" }, galleryItem: { backgroundColor: colors.surfaceMuted, borderRadius: radius.md, flexGrow: 1, overflow: "hidden", width: "30%" }, clothingImage: { aspectRatio: 0.82, width: "100%" }, imagePlaceholder: { alignItems: "center", aspectRatio: 0.82, backgroundColor: "#EFECFF", justifyContent: "center" }, placeholderMark: { color: colors.primary, fontSize: 32, fontWeight: "800" }, itemCopy: { gap: 2, padding: spacing.sm }, role: { ...typography.caption, color: colors.primary, textTransform: "capitalize" }, itemName: { ...typography.caption, color: colors.text, fontWeight: "700" },
   detailLayout: { alignItems: "flex-start", flexDirection: "row", gap: spacing.xl }, mobileStack: { flexDirection: "column" }, detailPanel: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, borderWidth: 1, flex: 0.7, gap: spacing.lg, minWidth: 280, padding: spacing.xl }, badgeRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }, badge: { backgroundColor: "#EFECFF", borderRadius: radius.pill, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs }, badgeText: { ...typography.caption, color: colors.primary, textTransform: "capitalize" }, info: { gap: spacing.xxs }, infoLabel: { ...typography.caption, color: colors.textMuted }, infoValue: { ...typography.body, color: colors.text }, explanation: { gap: spacing.xs }, sectionTitle: { ...typography.subheading, color: colors.text }, body: { ...typography.body, color: colors.textMuted },
-  backButton: { alignItems: "center", backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.pill, borderWidth: 1, height: 44, justifyContent: "center", width: 44 }, backSymbol: { color: colors.text, fontSize: 32, lineHeight: 34 }, errorBanner: { backgroundColor: "#FFF0ED", borderRadius: radius.md, padding: spacing.md }, errorText: { ...typography.caption, color: colors.error }, inlineLoading: { alignItems: "center", flexDirection: "row", gap: spacing.sm, paddingVertical: spacing.lg }, pressed: { opacity: 0.82 }
+  backButton: { alignItems: "center", backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.pill, borderWidth: 1, flexShrink: 0, height: 44, justifyContent: "center", width: 44 }, errorBanner: { backgroundColor: "#FFF0ED", borderRadius: radius.md, padding: spacing.md }, errorText: { ...typography.caption, color: colors.error }, inlineLoading: { alignItems: "center", flexDirection: "row", gap: spacing.sm, paddingVertical: spacing.lg }, pressed: { opacity: 0.82 }
   ,infoBanner: { backgroundColor: "#EEF3FF", borderRadius: radius.md, marginBottom: spacing.lg, padding: spacing.md }, infoBannerText: { ...typography.caption, color: colors.info }
 });

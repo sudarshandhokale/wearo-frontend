@@ -146,13 +146,14 @@ function StyleProfileSummary({ metadata, onEdit, profile }: { metadata: ReturnTy
   const styleOptions = metadata?.style_profile.preferred_styles || [];
   const colorOptions = metadata?.style_profile.preferred_colors || [];
   const avoidedOptions = metadata?.style_profile.disliked_colors || [];
-  const styleLabels = saved.any_style_preference === true ? ["Any style"] : labelsFor(profile.preferred_styles, styleOptions);
-  const colorLabels = saved.any_color_preference === true ? ["Any colors"] : labelsFor(profile.preferred_colors, colorOptions);
-  const avoidedLabels = labelsFor(profile.disliked_colors, avoidedOptions);
+  const styleLabels = saved.any_style_preference === true ? ["Any style"] : profile.preferred_style_labels || labelsFor(profile.preferred_styles, styleOptions);
+  const colorLabels = saved.any_color_preference === true ? ["Any colors"] : profile.preferred_color_labels || labelsFor(profile.preferred_colors, colorOptions);
+  const avoidedLabels = profile.disliked_color_labels || labelsFor(profile.disliked_colors, avoidedOptions);
   const fitLabels = Object.entries(profile.fit_preferences).map(([category, value]) => {
-    const label = metadata?.style_profile.fit_preferences[category]?.find((option) => option.key === value)?.label || readable(value);
+    const label = profile.fit_preference_labels?.[category] || metadata?.style_profile.fit_preferences[category]?.find((option) => option.key === value)?.label;
+    if (!label) return null;
     return `${readable(category)}: ${label}`;
-  });
+  }).filter((value): value is string => Boolean(value));
   const personalDetails = [
     typeof saved.gender_preference === "string" ? readable(saved.gender_preference) : null,
     typeof saved.build === "string" ? `${readable(saved.build)} build` : null,

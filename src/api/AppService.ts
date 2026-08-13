@@ -14,7 +14,11 @@ import type {
   StylingPlan,
   ConversationalStylingPlanInput,
   StylingPlanInput,
-  RecommendationResponse,
+  StylingRoutine,
+  StylingRoutineDraft,
+  StylingRoutineInput,
+  RoutineOccurrence,
+  StylistResponse,
   StyleProfile,
   StyleProfileInput,
   VisualizationMode,
@@ -59,19 +63,23 @@ function appendArray(form: FormData, key: string, values: string[]) {
 }
 
 function itemPayload(input: ClothingItemInput) {
+  const { user_usage_tags, use_ai_usage_tags, ...attributes } = input;
   return {
-    ...input,
-    formality_score: input.formality_score ? Number(input.formality_score) : null
+    ...attributes,
+    formality_score: input.formality_score ? Number(input.formality_score) : null,
+    ...(use_ai_usage_tags ? { use_ai_usage_tags: true } : { user_usage_tags })
   };
 }
 
 async function itemForm(input: ClothingItemInput, image?: PickedImage | null) {
   const form = new FormData();
   Object.entries(input).forEach(([key, value]) => {
+    if ((input.use_ai_usage_tags && key === "user_usage_tags") || (!input.use_ai_usage_tags && key === "use_ai_usage_tags")) return;
     if (Array.isArray(value)) {
-      appendArray(form, key, value);
+      if (value.length) appendArray(form, key, value);
+      else if (key === "user_usage_tags") form.append("clothing_item[user_usage_tags][]", "");
     } else if (value !== "") {
-      form.append(`clothing_item[${key}]`, value);
+      form.append(`clothing_item[${key}]`, String(value));
     }
   });
 
@@ -153,8 +161,36 @@ export const AppService = {
   async polishClothingItem(id: ClothingItem["id"]) {
     return RestService.POST<ClothingItem>(`/api/v1/clothing_items/${id}/polish`, undefined, await token());
   },
+  async stylingRoutineDrafts(prompt: string) {
+    return RestService.POST<StylingRoutineDraft[] | { drafts: StylingRoutineDraft[] }>(
+      "/api/v1/styling_routines/drafts",
+      { prompt },
+      await token()
+    );
+  },
+  async stylingRoutines() {
+    return RestService.GET<StylingRoutine[]>("/api/v1/styling_routines", await token());
+  },
+  async stylingRoutine(id: StylingRoutine["id"]) {
+    return RestService.GET<StylingRoutine>(`/api/v1/styling_routines/${id}`, await token());
+  },
+  async createStylingRoutine(input: StylingRoutineInput) {
+    return RestService.POST<StylingRoutine>("/api/v1/styling_routines", { styling_routine: input }, await token());
+  },
+  async updateStylingRoutine(id: StylingRoutine["id"], input: StylingRoutineInput) {
+    return RestService.PATCH<StylingRoutine>(`/api/v1/styling_routines/${id}`, { styling_routine: input }, await token());
+  },
+  async deleteStylingRoutine(id: StylingRoutine["id"]) {
+    return RestService.DELETE<{ message: string }>(`/api/v1/styling_routines/${id}`, await token());
+  },
+  async routineOccurrencesToday() {
+    return RestService.GET<RoutineOccurrence[]>("/api/v1/routine_occurrences/today", await token());
+  },
+  async routineOccurrences() {
+    return RestService.GET<RoutineOccurrence[]>("/api/v1/routine_occurrences", await token());
+  },
   async recommendations(prompt: string) {
-    return RestService.POST<RecommendationResponse>(
+    return RestService.POST<StylistResponse>(
       "/api/v1/stylist/recommendations",
       { prompt },
       await token()

@@ -3,6 +3,7 @@ export type AppScreen = "home" | "wardrobe" | "ask" | "outfits" | "history" | "p
 export type NavigationOptions = {
   prompt?: string;
   autoSend?: boolean;
+  recommendationRequestId?: number | string;
   clothingItemId?: number | string;
 };
 

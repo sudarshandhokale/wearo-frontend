@@ -156,6 +156,8 @@ export function OutfitDetail({ initialOutfit, roles, onChange }: { initialOutfit
     ? visualization
     : preferredReadyVisualization(storedVisualizations);
   const showcaseUrl = showcaseVisualization?.image?.url;
+  const retryAvailableAt = visualization?.status === "failed" && visualization.retry_after ? new Date(visualization.retry_after) : null;
+  const retryDisabled = Boolean(retryAvailableAt && retryAvailableAt.getTime() > Date.now());
 
   async function run(action: () => Promise<void>) {
     setIsSaving(true); setError(null);
@@ -168,14 +170,15 @@ export function OutfitDetail({ initialOutfit, roles, onChange }: { initialOutfit
       <View style={styles.visualControls}>
         <View style={styles.visualControlHeader}><View><Text style={styles.visualControlTitle}>{copy.visualization.title}</Text><Text style={styles.showcaseHint}>Choose how you want to see this outfit.</Text></View><View style={styles.actions}><StatusAction active={mode === "flat_lay"} icon={<ImageIcon color={mode === "flat_lay" ? colors.primary : colors.textMuted} size={18} />} label={copy.visualization.flatLay} onPress={() => chooseVisualizationMode("flat_lay")} /><StatusAction active={mode === "try_on"} icon={<UserRound color={mode === "try_on" ? colors.primary : colors.textMuted} size={18} />} label={copy.visualization.tryOn} onPress={() => chooseVisualizationMode("try_on")} /></View></View>
         <Text style={styles.hint}>{mode === "try_on" ? (user?.full_body_image ? copy.visualization.tryOnHint : copy.visualization.missingPhotoHint) : copy.visualization.flatLayHint}</Text>
-        {!visualization || visualization.status === "failed" ? <Button loading={isSaving} onPress={() => void createVisualization()} title={mode === "try_on" && !user?.full_body_image ? copy.visualization.uploadAndCreate : copy.visualization.create} variant="secondary" /> : visualization.status === "queued" || visualization.status === "processing" ? <Button loading onPress={() => undefined} title={copy.visualization.creating} variant="secondary" /> : null}
+        {!visualization || visualization.status === "failed" ? <Button disabled={retryDisabled} loading={isSaving} onPress={() => void createVisualization()} title={mode === "try_on" && !user?.full_body_image ? copy.visualization.uploadAndCreate : retryDisabled ? "Try again later" : copy.visualization.create} variant="secondary" /> : visualization.status === "queued" || visualization.status === "processing" ? <Button loading onPress={() => undefined} title={copy.visualization.creating} variant="secondary" /> : null}
         {visualization?.guidance?.message ? <Text style={styles.hint}>{visualization.guidance.message}</Text> : null}
-        {visualization?.status === "failed" ? <Text style={styles.errorText}>{copy.visualization.failed}</Text> : null}
+        {visualization?.status === "failed" ? <Text style={styles.errorText}>{visualization.failure_message || copy.visualization.failed}</Text> : null}
+        {retryDisabled && retryAvailableAt ? <Text style={styles.hint}>Retry available {formatRetryTime(retryAvailableAt)}.</Text> : null}
       </View>
-      <View style={styles.showcase}>{showcaseUrl ? <AuthenticatedImage resizeMode="contain" url={showcaseUrl} style={styles.showcaseImage} /> : <OutfitCover coverImages={outfit.cover_images} style={styles.showcaseImage} />}{showcaseVisualization ? <View style={styles.showcaseCaption}><Badge text={showcaseVisualization.mode === "try_on" ? "Personalized try-on" : "AI flat lay"} /><Text style={styles.showcaseHint}>Generated outfit visualization</Text></View> : null}</View><View style={styles.itemsSection}><Text style={styles.itemsSectionTitle}>Items in this look</Text><OutfitItems outfit={outfit} roles={roles} /></View>
+      <View style={styles.showcase}>{showcaseUrl ? <AuthenticatedImage resizeMode="contain" url={showcaseUrl} style={styles.showcaseImage} /> : <OutfitCover coverImages={outfit.cover_images} style={styles.showcaseImage} />}{showcaseVisualization ? <View style={styles.showcaseCaption}><Badge text={showcaseVisualization.mode_label || (showcaseVisualization.mode === "try_on" ? "Try on" : "Flat lay")} /><Text style={styles.showcaseHint}>Generated outfit visualization</Text></View> : null}</View><View style={styles.itemsSection}><Text style={styles.itemsSectionTitle}>Items in this look</Text><OutfitItems outfit={outfit} roles={roles} /></View>
     </View>
     <View style={[styles.panel, !usesWideDetailLayout && styles.stackedPanel]}>
-      <View style={styles.badges}><Badge text={humanize(outfit.status)} />{outfit.recommendation_score != null ? <Badge text={`${Math.round(outfit.recommendation_score)}% match`} /> : null}</View>
+      <View style={styles.badges}><Badge text={outfit.status_label || labelForStatus(outfit.status)} />{outfit.recommendation_score != null ? <Badge text={`${Math.round(outfit.recommendation_score)}% match`} /> : null}</View>
       <Text style={styles.explanation}>{outfit.explanation}</Text>
       <View style={styles.actions}><StatusAction active={outfit.status === "saved"} icon={<Bookmark color={outfit.status === "saved" ? colors.primary : colors.textMuted} size={18} />} label="Save" onPress={() => void updateStatus("saved")} /><StatusAction active={outfit.status === "dismissed"} icon={<X color={outfit.status === "dismissed" ? colors.error : colors.textMuted} size={18} />} label="Dismiss" onPress={() => void updateStatus("dismissed")} /></View>
 
@@ -208,7 +211,7 @@ function TryOnSetupModal({ error, onClose, onConfirm, stage, visible }: { error:
 function PhotoTip({ icon, text }: { icon: React.ReactNode; text: string }) { return <View style={styles.photoTip}><View style={styles.photoTipIcon}>{icon}</View><Text style={styles.photoTipText}>{text}</Text></View>; }
 
 function Section({ children, title }: { children: React.ReactNode; title: string }) { return <View style={styles.section}><Text style={styles.sectionTitle}>{title}</Text>{children}</View>; }
-function OutfitItems({ outfit, roles }: { outfit: Outfit; roles: MetadataOption[] }) { return <View style={styles.gallery}>{[...outfit.items].sort((a, b) => a.position - b.position).map((item) => { const url = resolveImageUrl(item.clothing_item.cover_image?.url); return <View key={item.id} style={styles.item}>{url ? <AuthenticatedImage resizeMode="cover" url={item.clothing_item.cover_image?.url} style={styles.image} /> : <View style={styles.placeholder}><Text style={styles.placeholderText}>W</Text></View>}<View style={styles.itemCopy}><Text style={styles.role}>{labelFor(roles, item.role)}</Text><Text numberOfLines={1} style={styles.itemName}>{item.clothing_item.name || item.clothing_item.subcategory || "Clothing item"}</Text></View></View>; })}</View>; }
+function OutfitItems({ outfit, roles }: { outfit: Outfit; roles: MetadataOption[] }) { return <View style={styles.gallery}>{[...outfit.items].sort((a, b) => a.position - b.position).map((item) => { const url = resolveImageUrl(item.clothing_item.cover_image?.url); return <View key={item.id} style={styles.item}>{url ? <AuthenticatedImage resizeMode="cover" url={item.clothing_item.cover_image?.url} style={styles.image} /> : <View style={styles.placeholder}><Text style={styles.placeholderText}>W</Text></View>}<View style={styles.itemCopy}><Text style={styles.role}>{item.role_label || labelFor(roles, item.role)}</Text><Text numberOfLines={1} style={styles.itemName}>{item.clothing_item.name || item.clothing_item.subcategory_label || item.clothing_item.subcategory || "Clothing item"}</Text></View></View>; })}</View>; }
 function Field({ label, ...props }: { label: string; value: string; placeholder: string; onChangeText: (value: string) => void }) { return <View style={styles.field}><Text style={styles.label}>{label}</Text><TextInput {...props} placeholderTextColor={colors.textSoft} style={styles.input} /></View>; }
 function StatusAction({ active, icon, label, onPress }: { active: boolean; icon: React.ReactNode; label: string; onPress: () => void }) { return <Pressable onPress={onPress} style={[styles.action, active && styles.actionActive]}>{icon}<Text style={[styles.actionText, active && styles.actionTextActive]}>{label}</Text></Pressable>; }
 function Badge({ text }: { text: string }) { return <View style={styles.badge}><Text style={styles.badgeText}>{text}</Text></View>; }
@@ -224,6 +227,8 @@ function preferredVisualization(stored: Partial<Record<VisualizationMode, Outfit
 }
 function labelFor(options: MetadataOption[], key: string) { return options.find((option) => option.key === key)?.label || humanize(key); }
 function humanize(value: string) { return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()); }
+function labelForStatus(status: OutfitStatus) { return status === "recommended" ? "Recommended" : status === "saved" ? "Saved" : status === "worn" ? "Worn" : "Dismissed"; }
+function formatRetryTime(value: Date) { return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(value); }
 function today() { return new Date().toISOString().slice(0, 10); }
 function messageFor(error: unknown) { return error instanceof Error ? error.message : "Something went wrong. Please try again."; }
 

@@ -17,13 +17,13 @@ import { desktopNavItems, mobileNavItems } from "./types";
 
 export function AppShell() {
   const [activeScreen, setActiveScreen] = useState<AppScreen>("home");
-  const [askRequest, setAskRequest] = useState<{ id: number; prompt: string; autoSend: boolean } | null>(null);
+  const [askRequest, setAskRequest] = useState<{ id: number; prompt?: string; autoSend: boolean; recommendationRequestId?: number | string } | null>(null);
   const [wardrobeItemRequest, setWardrobeItemRequest] = useState<{ id: number; clothingItemId: number | string } | null>(null);
   const { usesSidebar } = useResponsive();
 
   const navigate: Navigate = (screen, options) => {
     if (screen === "ask") {
-      setAskRequest(options?.prompt ? { id: Date.now(), prompt: options.prompt, autoSend: options.autoSend === true } : null);
+      setAskRequest(options?.prompt || options?.recommendationRequestId != null ? { id: Date.now(), prompt: options.prompt, autoSend: options.autoSend === true, recommendationRequestId: options.recommendationRequestId } : null);
     }
     if (screen === "wardrobe") setWardrobeItemRequest(options?.clothingItemId != null ? { id: Date.now(), clothingItemId: options.clothingItemId } : null);
     setActiveScreen(screen);
@@ -48,7 +48,7 @@ export function AppShell() {
   );
 }
 
-function renderScreen(activeScreen: AppScreen, navigate: Navigate, askRequest: { id: number; prompt: string; autoSend: boolean } | null, wardrobeItemRequest: { id: number; clothingItemId: number | string } | null): ReactNode {
+function renderScreen(activeScreen: AppScreen, navigate: Navigate, askRequest: { id: number; prompt?: string; autoSend: boolean; recommendationRequestId?: number | string } | null, wardrobeItemRequest: { id: number; clothingItemId: number | string } | null): ReactNode {
   switch (activeScreen) {
     case "wardrobe":
       return <WardrobeScreen initialItemRequest={wardrobeItemRequest} onNavigate={navigate} />;
@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderBottomColor: colors.border,
     borderBottomWidth: 1,
-    minHeight: 76,
+    minHeight: 72,
     justifyContent: "center",
     paddingHorizontal: spacing.lg
   },
@@ -185,10 +185,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRightColor: colors.border,
     borderRightWidth: 1,
-    gap: spacing.xxxl,
+    gap: spacing.xxl,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.xxl,
-    width: 244
+    width: 228
   },
   sidebarNav: {
     gap: spacing.xs
@@ -209,16 +209,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     alignSelf: "center",
     backgroundColor: colors.surface,
-    borderRadius: radius.xl,
-    bottom: spacing.md,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    bottom: spacing.sm,
     flexDirection: "row",
     gap: 2,
     justifyContent: "space-between",
-    left: spacing.md,
+    left: spacing.sm,
     paddingHorizontal: spacing.xs,
     paddingVertical: spacing.xs,
     position: "absolute",
-    right: spacing.md
+    right: spacing.sm
   },
   bottomButton: {
     alignItems: "center",

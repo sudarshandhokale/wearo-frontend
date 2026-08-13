@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ChevronRight, Clock3, Sparkles } from "lucide-react-native";
 
 import { AppService } from "../api/AppService";
-import type { Outfit, WearHistory } from "../api/types";
+import type { Outfit, RecommendationRequest, RoutineOccurrence, WearHistory } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { useAppData } from "../context/AppDataContext";
 import { OutfitCover } from "../components/OutfitCover";
@@ -24,11 +25,16 @@ export function HomeScreen({ onNavigate }: HomeScreenProps) {
   const { usesSidebar } = useResponsive();
   const [prompts, setPrompts] = useState<SuggestedPrompt[]>([]);
   const [recentWears, setRecentWears] = useState<RecentWear[]>([]);
+  const [recentRequests, setRecentRequests] = useState<RecommendationRequest[]>([]);
+  const [todayRoutines, setTodayRoutines] = useState<RoutineOccurrence[]>([]);
   const [prompt, setPrompt] = useState("");
+  const [promptFocused, setPromptFocused] = useState(false);
 
   useEffect(() => {
     AIStylistService.suggestedPrompts().then(setPrompts);
     let cancelled = false;
+    void AppService.recommendationRequests(1, 4).then((response) => { if (!cancelled) setRecentRequests(response.data.filter((request) => request.status === "completed")); }).catch(() => undefined);
+    void AppService.routineOccurrencesToday().then((response) => { if (!cancelled) setTodayRoutines(response.data); }).catch(() => undefined);
     void AppService.wearHistory(1, 3).then(async (response) => {
       const resolved = await Promise.allSettled(response.data.map(async (wear) => ({ ...wear, outfit: wear.outfit || (await AppService.outfit(wear.outfit_id)).data })));
       if (!cancelled) setRecentWears(resolved.flatMap((result) => result.status === "fulfilled" ? [result.value] : []));
@@ -76,10 +82,12 @@ export function HomeScreen({ onNavigate }: HomeScreenProps) {
           <View style={styles.hero}>
             <Text style={styles.kicker}>Your wardrobe. Your style. Perfected by AI.</Text>
             <Text style={styles.title}>Good morning,{"\n"}{firstName} 👋</Text>
-            <View style={styles.promptBar}>
+            <View style={[styles.promptBar, promptFocused && styles.promptBarFocused]}>
               <TextInput
                 accessibilityLabel="Ask WEARO what to wear"
+                onBlur={() => setPromptFocused(false)}
                 onChangeText={setPrompt}
+                onFocus={() => setPromptFocused(true)}
                 onSubmitEditing={() => askWearo(prompt || "What should I wear today?")}
                 placeholder="What should I wear today?"
                 placeholderTextColor={colors.textSoft}
@@ -97,14 +105,8 @@ export function HomeScreen({ onNavigate }: HomeScreenProps) {
             </View>
           </View>
 
-          <Pressable onPress={() => onNavigate("ask")} style={styles.stylistCard}>
-            <View style={styles.stylistMark}><Text style={styles.stylistMarkText}>✦</Text></View>
-            <View style={styles.stylistCopy}>
-              <Text style={styles.loadingTitle}>Create an outfit from your wardrobe</Text>
-              <Text style={styles.loadingText}>Tell WEARO where you're going and get up to three complete looks.</Text>
-            </View>
-            <Text style={styles.completionArrow}>›</Text>
-          </Pressable>
+          {recentRequests.length ? <View style={styles.activitySection}><View style={styles.sectionHeader}><View><Text style={styles.panelTitle}>Recent styling</Text><Text style={styles.sectionSubtitle}>Revisit your latest outfit searches</Text></View><Pressable onPress={() => onNavigate("history")}><Text style={styles.viewAll}>View all</Text></Pressable></View>{usesSidebar ? <View style={styles.requestGrid}>{recentRequests.slice(0, 3).map((request) => <RecentRequestCard key={request.id} onPress={() => onNavigate("ask", { recommendationRequestId: request.id })} request={request} />)}</View> : <ScrollView contentContainerStyle={styles.requestRail} horizontal showsHorizontalScrollIndicator={false}>{recentRequests.map((request) => <RecentRequestCard key={request.id} mobile onPress={() => onNavigate("ask", { recommendationRequestId: request.id })} request={request} />)}</ScrollView>}</View> : <Pressable onPress={() => onNavigate("ask")} style={styles.emptyActivity}><View style={styles.stylistMark}><Sparkles color={colors.primary} size={21} /></View><View style={styles.stylistCopy}><Text style={styles.loadingTitle}>Create your first outfit</Text><Text style={styles.loadingText}>Tell WEARO what you're dressing for.</Text></View><ChevronRight color={colors.primary} size={20} /></Pressable>}
+          {todayRoutines.length ? <View style={styles.activitySection}><View style={styles.sectionHeader}><View><Text style={styles.panelTitle}>Today&apos;s routines</Text><Text style={styles.sectionSubtitle}>Prepared around your schedule and weather</Text></View><Pressable onPress={() => onNavigate("outfits")}><Text style={styles.viewAll}>Manage</Text></Pressable></View><ScrollView contentContainerStyle={styles.requestRail} horizontal showsHorizontalScrollIndicator={false}>{todayRoutines.map((occurrence) => <Pressable key={occurrence.id} onPress={() => onNavigate("outfits")} style={styles.routineCard}><View style={styles.routineCover}>{occurrence.outfit ? <OutfitCover coverImages={occurrence.outfit.cover_images} style={styles.routineImage} /> : <Clock3 color={colors.primary} size={24} />}</View><View style={styles.routineCopy}><Text numberOfLines={1} style={styles.loadingTitle}>{occurrence.routine?.name || "Routine"}</Text><Text style={styles.loadingText}>{routineTime(occurrence.scheduled_for)} · {occurrence.status_label || occurrence.status}</Text>{occurrence.failure_message ? <Text numberOfLines={2} style={styles.routineFailure}>{occurrence.failure_message}</Text> : null}</View></Pressable>)}</ScrollView></View> : null}
         </View>
 
         <View style={styles.sideColumn}>
@@ -156,7 +158,7 @@ export function HomeScreen({ onNavigate }: HomeScreenProps) {
                   <OutfitCover coverImages={wear.outfit.cover_images} style={styles.recentImage} />
                   <Text numberOfLines={2} style={styles.recentName}>{wear.outfit.name}</Text>
                   <Text style={styles.recentDate}>{formatWornDate(wear.worn_on)}</Text>
-                  {wear.occasion ? <Text numberOfLines={1} style={styles.recentOccasion}>{humanize(wear.occasion)}</Text> : null}
+                  {wear.occasion_label ? <Text numberOfLines={1} style={styles.recentOccasion}>{wear.occasion_label}</Text> : null}
                 </Pressable>
               ))}
             </View>
@@ -195,8 +197,19 @@ function QuickAction({
   );
 }
 
+function RecentRequestCard({ mobile = false, onPress, request }: { mobile?: boolean; onPress: () => void; request: RecommendationRequest }) {
+  const coverImages = request.outfits?.flatMap((outfit) => outfit.cover_images).slice(0, 1) || [];
+  return <Pressable accessibilityLabel={`Open ${request.prompt}`} onPress={onPress} style={({ pressed }) => [styles.requestCard, mobile && styles.mobileRequestCard, pressed && styles.pressed]}>{coverImages.length ? <OutfitCover coverImages={coverImages} style={styles.requestCover} /> : <View style={styles.requestPlaceholder}><Sparkles color={colors.primary} size={24} /></View>}<View style={styles.requestCopy}><Text numberOfLines={2} style={styles.requestTitle}>{request.prompt}</Text><View style={styles.requestMeta}><Clock3 color={colors.textSoft} size={14} /><Text style={styles.requestMetaText}>{relativeDate(request.created_at)} · {request.outfits?.length || 0} {request.outfits?.length === 1 ? "look" : "looks"}</Text></View></View></Pressable>;
+}
+
+function routineTime(value: string) {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(parsed);
+}
+
 function formatWornDate(value: string) { const date = new Date(`${value}T12:00:00`); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short" }).format(date); }
 function humanize(value: string) { return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()); }
+function relativeDate(value: string) { const parsed = new Date(value); if (Number.isNaN(parsed.getTime())) return value; const days = Math.floor((Date.now() - parsed.getTime()) / 86400000); if (days <= 0) return "Today"; if (days === 1) return "Yesterday"; if (days < 7) return `${days} days ago`; return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(parsed); }
 
 const styles = StyleSheet.create({
   layout: {
@@ -258,19 +271,26 @@ const styles = StyleSheet.create({
     ...shadows.soft,
     alignItems: "center",
     backgroundColor: colors.surface,
+    borderColor: "transparent",
     borderRadius: radius.pill,
+    borderWidth: 2,
     flexDirection: "row",
     gap: spacing.sm,
     minHeight: 56,
     paddingLeft: spacing.lg,
     paddingRight: spacing.xs
   },
+  promptBarFocused: {
+    borderColor: colors.primary,
+    boxShadow: "0 0 0 3px rgba(108, 92, 231, 0.16)"
+  } as never,
   promptInput: {
     ...typography.body,
     color: colors.text,
     flex: 1,
-    minHeight: 52
-  },
+    minHeight: 52,
+    outlineStyle: "none"
+  } as never,
   promptButton: {
     alignItems: "center",
     backgroundColor: colors.primary,
@@ -298,6 +318,94 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: spacing.md,
     padding: spacing.lg
+  },
+  activitySection: {
+    gap: spacing.md
+  },
+  sectionHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.sm,
+    justifyContent: "space-between"
+  },
+  sectionSubtitle: {
+    ...typography.caption,
+    color: colors.textMuted
+  },
+  viewAll: {
+    ...typography.caption,
+    color: colors.primary
+  },
+  requestGrid: {
+    flexDirection: "row",
+    gap: spacing.md
+  },
+  requestRail: {
+    alignItems: "stretch",
+    gap: spacing.md,
+    paddingBottom: spacing.xs,
+    paddingRight: spacing.xl
+  },
+  routineCard: { ...shadows.soft, backgroundColor: colors.surface, borderRadius: radius.md, flexDirection: "row", minWidth: 270, overflow: "hidden", width: 300 },
+  routineCover: { alignItems: "center", backgroundColor: "#EFECFF", height: 94, justifyContent: "center", width: 94 },
+  routineImage: { height: "100%", width: "100%" },
+  routineCopy: { flex: 1, gap: spacing.xxs, justifyContent: "center", padding: spacing.sm },
+  routineFailure: { ...typography.caption, color: colors.error, fontWeight: "500" },
+  requestCard: {
+    ...shadows.soft,
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flex: 1,
+    minWidth: 0,
+    overflow: "hidden"
+  },
+  mobileRequestCard: {
+    flexBasis: 260,
+    flexGrow: 0,
+    flexShrink: 0,
+    minHeight: 238,
+    minWidth: 260,
+    width: 260
+  },
+  requestCover: {
+    height: 150,
+    width: "100%"
+  },
+  requestPlaceholder: {
+    alignItems: "center",
+    backgroundColor: "#EFECFF",
+    height: 150,
+    justifyContent: "center",
+    width: "100%"
+  },
+  requestCopy: {
+    gap: spacing.xs,
+    padding: spacing.sm
+  },
+  requestTitle: {
+    ...typography.button,
+    color: colors.text,
+    minHeight: 38
+  },
+  requestMeta: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.xs
+  },
+  requestMetaText: {
+    ...typography.caption,
+    color: colors.textMuted
+  },
+  emptyActivity: {
+    ...shadows.soft,
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    flexDirection: "row",
+    gap: spacing.md,
+    padding: spacing.md
   },
   stylistMark: {
     alignItems: "center",
