@@ -5,6 +5,7 @@ export type NavigationOptions = {
   autoSend?: boolean;
   recommendationRequestId?: number | string;
   clothingItemId?: number | string;
+  outfitId?: number | string;
 };
 
 export type Navigate = (screen: AppScreen, options?: NavigationOptions) => void;

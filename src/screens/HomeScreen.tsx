@@ -29,17 +29,21 @@ export function HomeScreen({ onNavigate }: HomeScreenProps) {
   const [todayRoutines, setTodayRoutines] = useState<RoutineOccurrence[]>([]);
   const [prompt, setPrompt] = useState("");
   const [promptFocused, setPromptFocused] = useState(false);
+  const readyRoutines = todayRoutines.filter((occurrence) => occurrence.status === "generated" && occurrence.outfit);
+  const upcomingRoutines = todayRoutines.filter((occurrence) => occurrence.status !== "generated" || !occurrence.outfit);
 
   useEffect(() => {
     AIStylistService.suggestedPrompts().then(setPrompts);
     let cancelled = false;
     void AppService.recommendationRequests(1, 4).then((response) => { if (!cancelled) setRecentRequests(response.data.filter((request) => request.status === "completed")); }).catch(() => undefined);
-    void AppService.routineOccurrencesToday().then((response) => { if (!cancelled) setTodayRoutines(response.data); }).catch(() => undefined);
+    const loadRoutines = () => void AppService.routineOccurrencesToday().then((response) => { if (!cancelled) setTodayRoutines(response.data); }).catch(() => undefined);
+    loadRoutines();
+    const routinePoll = setInterval(loadRoutines, 15000);
     void AppService.wearHistory(1, 3).then(async (response) => {
       const resolved = await Promise.allSettled(response.data.map(async (wear) => ({ ...wear, outfit: wear.outfit || (await AppService.outfit(wear.outfit_id)).data })));
       if (!cancelled) setRecentWears(resolved.flatMap((result) => result.status === "fulfilled" ? [result.value] : []));
     }).catch(() => undefined);
-    return () => { cancelled = true; };
+    return () => { cancelled = true; clearInterval(routinePoll); };
   }, []);
 
   const firstName = user?.first_name || "there";
@@ -105,8 +109,69 @@ export function HomeScreen({ onNavigate }: HomeScreenProps) {
             </View>
           </View>
 
-          {recentRequests.length ? <View style={styles.activitySection}><View style={styles.sectionHeader}><View><Text style={styles.panelTitle}>Recent styling</Text><Text style={styles.sectionSubtitle}>Revisit your latest outfit searches</Text></View><Pressable onPress={() => onNavigate("history")}><Text style={styles.viewAll}>View all</Text></Pressable></View>{usesSidebar ? <View style={styles.requestGrid}>{recentRequests.slice(0, 3).map((request) => <RecentRequestCard key={request.id} onPress={() => onNavigate("ask", { recommendationRequestId: request.id })} request={request} />)}</View> : <ScrollView contentContainerStyle={styles.requestRail} horizontal showsHorizontalScrollIndicator={false}>{recentRequests.map((request) => <RecentRequestCard key={request.id} mobile onPress={() => onNavigate("ask", { recommendationRequestId: request.id })} request={request} />)}</ScrollView>}</View> : <Pressable onPress={() => onNavigate("ask")} style={styles.emptyActivity}><View style={styles.stylistMark}><Sparkles color={colors.primary} size={21} /></View><View style={styles.stylistCopy}><Text style={styles.loadingTitle}>Create your first outfit</Text><Text style={styles.loadingText}>Tell WEARO what you're dressing for.</Text></View><ChevronRight color={colors.primary} size={20} /></Pressable>}
-          {todayRoutines.length ? <View style={styles.activitySection}><View style={styles.sectionHeader}><View><Text style={styles.panelTitle}>Today&apos;s routines</Text><Text style={styles.sectionSubtitle}>Prepared around your schedule and weather</Text></View><Pressable onPress={() => onNavigate("outfits")}><Text style={styles.viewAll}>Manage</Text></Pressable></View><ScrollView contentContainerStyle={styles.requestRail} horizontal showsHorizontalScrollIndicator={false}>{todayRoutines.map((occurrence) => <Pressable key={occurrence.id} onPress={() => onNavigate("outfits")} style={styles.routineCard}><View style={styles.routineCover}>{occurrence.outfit ? <OutfitCover coverImages={occurrence.outfit.cover_images} style={styles.routineImage} /> : <Clock3 color={colors.primary} size={24} />}</View><View style={styles.routineCopy}><Text numberOfLines={1} style={styles.loadingTitle}>{occurrence.routine?.name || "Routine"}</Text><Text style={styles.loadingText}>{routineTime(occurrence.scheduled_for)} · {occurrence.status_label || occurrence.status}</Text>{occurrence.failure_message ? <Text numberOfLines={2} style={styles.routineFailure}>{occurrence.failure_message}</Text> : null}</View></Pressable>)}</ScrollView></View> : null}
+          {recentRequests.length ? (
+            <View style={styles.activitySection}>
+              <View style={styles.sectionHeader}>
+                <View>
+                  <Text style={styles.panelTitle}>Recent styling</Text>
+                  <Text style={styles.sectionSubtitle}>Revisit your latest outfit searches</Text>
+                </View>
+                <Pressable onPress={() => onNavigate("history")}><Text style={styles.viewAll}>View all</Text></Pressable>
+              </View>
+              <View style={usesSidebar ? styles.requestGrid : styles.mobileActivityList}>
+                {recentRequests.slice(0, 3).map((request) => (
+                  <RecentRequestCard
+                    key={request.id}
+                    mobile={!usesSidebar}
+                    onPress={() => onNavigate("ask", { recommendationRequestId: request.id })}
+                    request={request}
+                  />
+                ))}
+              </View>
+            </View>
+          ) : (
+            <Pressable onPress={() => onNavigate("ask")} style={styles.emptyActivity}>
+              <View style={styles.stylistMark}><Sparkles color={colors.primary} size={21} /></View>
+              <View style={styles.stylistCopy}>
+                <Text style={styles.loadingTitle}>Create your first outfit</Text>
+                <Text style={styles.loadingText}>Tell WEARO what you're dressing for.</Text>
+              </View>
+              <ChevronRight color={colors.primary} size={20} />
+            </Pressable>
+          )}
+          {readyRoutines.length ? (
+            <View style={styles.activitySection}>
+              <View style={styles.sectionHeader}>
+                <View>
+                  <Text style={styles.panelTitle}>Routine outfits ready</Text>
+                  <Text style={styles.sectionSubtitle}>Prepared for today&apos;s schedule and weather</Text>
+                </View>
+                <Pressable onPress={() => onNavigate("outfits")}><Text style={styles.viewAll}>Manage</Text></Pressable>
+              </View>
+              {usesSidebar ? (
+                <ScrollView contentContainerStyle={styles.requestRail} horizontal showsHorizontalScrollIndicator={false}>
+                  {readyRoutines.map((occurrence) => <RoutineCard key={occurrence.id} occurrence={occurrence} onPress={() => onNavigate("outfits", { outfitId: occurrence.outfit!.id })} />)}
+                </ScrollView>
+              ) : (
+                <View style={styles.mobileActivityList}>
+                  {readyRoutines.map((occurrence) => <RoutineCard key={occurrence.id} mobile occurrence={occurrence} onPress={() => onNavigate("outfits", { outfitId: occurrence.outfit!.id })} />)}
+                </View>
+              )}
+            </View>
+          ) : null}
+          {upcomingRoutines.length ? (
+            <View style={styles.activitySection}>
+              <View style={styles.sectionHeader}>
+                <View>
+                  <Text style={styles.panelTitle}>Coming up</Text>
+                  <Text style={styles.sectionSubtitle}>WEARO will prepare these routine outfits automatically</Text>
+                </View>
+              </View>
+              <View style={styles.mobileActivityList}>
+                {upcomingRoutines.slice(0, usesSidebar ? 2 : 3).map((occurrence) => <RoutineCard key={occurrence.id} mobile occurrence={occurrence} onPress={() => onNavigate("outfits")} />)}
+              </View>
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.sideColumn}>
@@ -199,7 +264,12 @@ function QuickAction({
 
 function RecentRequestCard({ mobile = false, onPress, request }: { mobile?: boolean; onPress: () => void; request: RecommendationRequest }) {
   const coverImages = request.outfits?.flatMap((outfit) => outfit.cover_images).slice(0, 1) || [];
-  return <Pressable accessibilityLabel={`Open ${request.prompt}`} onPress={onPress} style={({ pressed }) => [styles.requestCard, mobile && styles.mobileRequestCard, pressed && styles.pressed]}>{coverImages.length ? <OutfitCover coverImages={coverImages} style={styles.requestCover} /> : <View style={styles.requestPlaceholder}><Sparkles color={colors.primary} size={24} /></View>}<View style={styles.requestCopy}><Text numberOfLines={2} style={styles.requestTitle}>{request.prompt}</Text><View style={styles.requestMeta}><Clock3 color={colors.textSoft} size={14} /><Text style={styles.requestMetaText}>{relativeDate(request.created_at)} · {request.outfits?.length || 0} {request.outfits?.length === 1 ? "look" : "looks"}</Text></View></View></Pressable>;
+  return <Pressable accessibilityLabel={`Open ${request.prompt}`} onPress={onPress} style={({ pressed }) => [styles.requestCard, mobile && styles.mobileRequestCard, pressed && styles.pressed]}>{coverImages.length ? <OutfitCover coverImages={coverImages} style={[styles.requestCover, mobile && styles.mobileRequestCover]} /> : <View style={[styles.requestPlaceholder, mobile && styles.mobileRequestCover]}><Sparkles color={colors.primary} size={24} /></View>}<View style={[styles.requestCopy, mobile && styles.mobileRequestCopy]}><Text numberOfLines={2} style={styles.requestTitle}>{request.prompt}</Text><View style={styles.requestMeta}><Clock3 color={colors.textSoft} size={14} /><Text style={styles.requestMetaText}>{relativeDate(request.created_at)} · {request.outfits?.length || 0} {request.outfits?.length === 1 ? "look" : "looks"}</Text></View></View></Pressable>;
+}
+
+function RoutineCard({ mobile = false, occurrence, onPress }: { mobile?: boolean; occurrence: RoutineOccurrence; onPress: () => void }) {
+  const ready = occurrence.status === "generated" && Boolean(occurrence.outfit);
+  return <Pressable onPress={onPress} style={[styles.routineCard, mobile && styles.mobileRoutineCard]}><View style={styles.routineCover}>{occurrence.outfit ? <OutfitCover coverImages={occurrence.outfit.cover_images} style={styles.routineImage} /> : <Clock3 color={colors.primary} size={24} />}</View><View style={styles.routineCopy}><Text style={styles.routineEyebrow}>{ready ? "ROUTINE OUTFIT" : occurrence.status_label || humanize(occurrence.status)}</Text><Text numberOfLines={1} style={styles.loadingTitle}>{occurrence.outfit?.name || occurrence.routine?.name || "Routine"}</Text><Text numberOfLines={1} style={styles.loadingText}>{occurrence.routine?.name || "Routine"} · {routineTime(occurrence.scheduled_for)}</Text>{occurrence.failure_message ? <Text numberOfLines={2} style={styles.routineFailure}>{occurrence.failure_message}</Text> : null}</View><ChevronRight color={colors.primary} size={18} style={styles.routineArrow} /></Pressable>;
 }
 
 function routineTime(value: string) {
@@ -340,6 +410,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: spacing.md
   },
+  mobileActivityList: {
+    gap: spacing.sm
+  },
   requestRail: {
     alignItems: "stretch",
     gap: spacing.md,
@@ -347,9 +420,12 @@ const styles = StyleSheet.create({
     paddingRight: spacing.xl
   },
   routineCard: { ...shadows.soft, backgroundColor: colors.surface, borderRadius: radius.md, flexDirection: "row", minWidth: 270, overflow: "hidden", width: 300 },
+  mobileRoutineCard: { minWidth: 0, width: "100%" },
   routineCover: { alignItems: "center", backgroundColor: "#EFECFF", height: 94, justifyContent: "center", width: 94 },
   routineImage: { height: "100%", width: "100%" },
   routineCopy: { flex: 1, gap: spacing.xxs, justifyContent: "center", padding: spacing.sm },
+  routineEyebrow: { ...typography.caption, color: colors.primary, fontSize: 9 },
+  routineArrow: { alignSelf: "center", marginRight: spacing.sm },
   routineFailure: { ...typography.caption, color: colors.error, fontWeight: "500" },
   requestCard: {
     ...shadows.soft,
@@ -362,12 +438,10 @@ const styles = StyleSheet.create({
     overflow: "hidden"
   },
   mobileRequestCard: {
-    flexBasis: 260,
+    flexDirection: "row",
     flexGrow: 0,
-    flexShrink: 0,
-    minHeight: 238,
-    minWidth: 260,
-    width: 260
+    minHeight: 112,
+    width: "100%"
   },
   requestCover: {
     height: 150,
@@ -380,9 +454,17 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     width: "100%"
   },
+  mobileRequestCover: {
+    height: 112,
+    width: 112
+  },
   requestCopy: {
     gap: spacing.xs,
     padding: spacing.sm
+  },
+  mobileRequestCopy: {
+    flex: 1,
+    justifyContent: "center"
   },
   requestTitle: {
     ...typography.button,

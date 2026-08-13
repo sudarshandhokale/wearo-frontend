@@ -19,6 +19,7 @@ export function AppShell() {
   const [activeScreen, setActiveScreen] = useState<AppScreen>("home");
   const [askRequest, setAskRequest] = useState<{ id: number; prompt?: string; autoSend: boolean; recommendationRequestId?: number | string } | null>(null);
   const [wardrobeItemRequest, setWardrobeItemRequest] = useState<{ id: number; clothingItemId: number | string } | null>(null);
+  const [outfitRequest, setOutfitRequest] = useState<{ id: number; outfitId: number | string } | null>(null);
   const { usesSidebar } = useResponsive();
 
   const navigate: Navigate = (screen, options) => {
@@ -26,9 +27,10 @@ export function AppShell() {
       setAskRequest(options?.prompt || options?.recommendationRequestId != null ? { id: Date.now(), prompt: options.prompt, autoSend: options.autoSend === true, recommendationRequestId: options.recommendationRequestId } : null);
     }
     if (screen === "wardrobe") setWardrobeItemRequest(options?.clothingItemId != null ? { id: Date.now(), clothingItemId: options.clothingItemId } : null);
+    if (screen === "outfits") setOutfitRequest(options?.outfitId != null ? { id: Date.now(), outfitId: options.outfitId } : null);
     setActiveScreen(screen);
   };
-  const screen = useMemo(() => renderScreen(activeScreen, navigate, askRequest, wardrobeItemRequest), [activeScreen, askRequest, wardrobeItemRequest]);
+  const screen = useMemo(() => renderScreen(activeScreen, navigate, askRequest, wardrobeItemRequest, outfitRequest), [activeScreen, askRequest, wardrobeItemRequest, outfitRequest]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -48,14 +50,14 @@ export function AppShell() {
   );
 }
 
-function renderScreen(activeScreen: AppScreen, navigate: Navigate, askRequest: { id: number; prompt?: string; autoSend: boolean; recommendationRequestId?: number | string } | null, wardrobeItemRequest: { id: number; clothingItemId: number | string } | null): ReactNode {
+function renderScreen(activeScreen: AppScreen, navigate: Navigate, askRequest: { id: number; prompt?: string; autoSend: boolean; recommendationRequestId?: number | string } | null, wardrobeItemRequest: { id: number; clothingItemId: number | string } | null, outfitRequest: { id: number; outfitId: number | string } | null): ReactNode {
   switch (activeScreen) {
     case "wardrobe":
       return <WardrobeScreen initialItemRequest={wardrobeItemRequest} onNavigate={navigate} />;
     case "ask":
       return <AskWearoScreen initialRequest={askRequest} onNavigate={navigate} />;
     case "outfits":
-      return <OutfitsScreen onNavigate={navigate} />;
+      return <OutfitsScreen initialOutfitRequest={outfitRequest} onNavigate={navigate} />;
     case "history":
       return <HistoryScreen onNavigate={navigate} />;
     case "profile":

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { SlidersHorizontal } from "lucide-react-native";
 
 import { AppService, PickedImage, resolveImageUrl } from "../api/AppService";
 import type { ClothingItem, ClothingItemInput, MetadataOption } from "../api/types";
@@ -20,7 +21,7 @@ const initialInput: ClothingItemInput = { name: "", garment_type: "", category: 
 export function WardrobeScreen({ initialItemRequest, onNavigate }: { initialItemRequest?: { id: number; clothingItemId: number | string } | null; onNavigate: (screen: AppScreen) => void }) {
   void onNavigate;
   const { metadata } = useAppData();
-  const { wardrobeColumns } = useResponsive();
+  const { isMobile, wardrobeColumns } = useResponsive();
   const [items, setItems] = useState<ClothingItem[]>([]);
   const [mode, setMode] = useState<ViewMode>("list");
   const [selected, setSelected] = useState<ClothingItem | null>(null);
@@ -29,6 +30,7 @@ export function WardrobeScreen({ initialItemRequest, onNavigate }: { initialItem
   const [categoryFilter, setCategoryFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [colorFilter, setColorFilter] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -192,11 +194,12 @@ export function WardrobeScreen({ initialItemRequest, onNavigate }: { initialItem
         <View style={styles.headerCopy}><Text style={styles.title}>My Wardrobe</Text><Text style={styles.subtitle}>Your clothes, organized and ready to style.</Text></View>
         <Button onPress={startAdd} style={styles.addButton} title="Add clothes" />
       </View>
-      <View style={styles.filters}>
+      {isMobile ? <Pressable accessibilityRole="button" onPress={() => setShowFilters((value) => !value)} style={styles.filterToggle}><SlidersHorizontal color={colors.primary} size={18} /><Text style={styles.filterToggleText}>{showFilters ? "Hide filters" : "Filter wardrobe"}</Text>{categoryFilter || statusFilter || colorFilter ? <View style={styles.filterCount}><Text style={styles.filterCountText}>{[categoryFilter, statusFilter, colorFilter].filter(Boolean).length}</Text></View> : null}</Pressable> : null}
+      {(!isMobile || showFilters) ? <View style={styles.filters}>
         <FilterGroup label="Category" options={categories} selected={categoryFilter} onSelect={setCategoryFilter} />
         <FilterGroup label="Status" options={statusOptions} selected={statusFilter} onSelect={setStatusFilter} />
         <View style={styles.colorFilter}><Text style={styles.filterLabel}>Color</Text><TextInput onChangeText={setColorFilter} onSubmitEditing={() => void load()} placeholder="e.g. navy" placeholderTextColor={colors.textSoft} style={styles.filterInput} value={colorFilter} /></View>
-      </View>
+      </View> : null}
       {error ? <ErrorBanner message={error} /> : null}
       {isLoading && !items.length ? <Loading label="Loading your wardrobe" /> : null}
       {!isLoading && !items.length ? <EmptyWardrobe onAdd={startAdd} /> : null}
@@ -306,7 +309,7 @@ function isItemProcessing(item: ClothingItem) { return ["uploaded", "processing"
 
 const styles = StyleSheet.create({
   headerRow: { alignItems: "center", flexDirection: "row", gap: spacing.md, justifyContent: "space-between", marginBottom: spacing.xl }, headerCopy: { flex: 1, gap: spacing.xs }, title: { ...typography.display, color: colors.text }, subtitle: { ...typography.body, color: colors.textMuted }, addButton: { minWidth: 130 },
-  filters: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, borderWidth: 1, gap: spacing.md, marginBottom: spacing.xl, padding: spacing.lg }, filterGroup: { gap: spacing.xs }, filterLabel: { ...typography.caption, color: colors.textMuted }, chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }, chip: { borderColor: colors.border, borderRadius: radius.pill, borderWidth: 1, minHeight: 36, justifyContent: "center", paddingHorizontal: spacing.md }, chipSelected: { backgroundColor: "#EFECFF", borderColor: colors.primary }, chipText: { ...typography.caption, color: colors.textMuted }, chipTextSelected: { color: colors.primary }, colorFilter: { gap: spacing.xs }, filterInput: { ...typography.body, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, color: colors.text, minHeight: 44, outlineStyle: "none", paddingHorizontal: spacing.md } as never,
+  filters: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, borderWidth: 1, gap: spacing.md, marginBottom: spacing.xl, padding: spacing.lg }, filterToggle: { alignItems: "center", alignSelf: "flex-start", backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, flexDirection: "row", gap: spacing.sm, marginBottom: spacing.md, minHeight: 44, paddingHorizontal: spacing.md }, filterToggleText: { ...typography.button, color: colors.text }, filterCount: { alignItems: "center", backgroundColor: colors.primary, borderRadius: radius.pill, height: 22, justifyContent: "center", minWidth: 22, paddingHorizontal: spacing.xs }, filterCountText: { ...typography.caption, color: colors.surface, fontSize: 10 }, filterGroup: { gap: spacing.xs }, filterLabel: { ...typography.caption, color: colors.textMuted }, chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }, chip: { borderColor: colors.border, borderRadius: radius.pill, borderWidth: 1, minHeight: 36, justifyContent: "center", paddingHorizontal: spacing.md }, chipSelected: { backgroundColor: "#EFECFF", borderColor: colors.primary }, chipText: { ...typography.caption, color: colors.textMuted }, chipTextSelected: { color: colors.primary }, colorFilter: { gap: spacing.xs }, filterInput: { ...typography.body, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, color: colors.text, minHeight: 44, outlineStyle: "none", paddingHorizontal: spacing.md } as never,
   itemGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md }, itemCard: { ...shadows.soft, backgroundColor: colors.surface, borderRadius: radius.md, overflow: "hidden" }, itemImage: { aspectRatio: 0.9, width: "100%" }, itemImagePlaceholder: { alignItems: "center", aspectRatio: 0.9, backgroundColor: "#F0EDFF", justifyContent: "center", width: "100%" }, itemImagePlaceholderText: { color: colors.primary, fontSize: 44, fontWeight: "900" }, itemCopy: { gap: spacing.xxs, padding: spacing.sm }, itemName: { ...typography.button, color: colors.text }, itemMeta: { ...typography.caption, color: colors.textMuted, fontWeight: "500", textTransform: "capitalize" },
   emptyState: { alignItems: "center", backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, borderWidth: 1, gap: spacing.sm, padding: spacing.xxxl }, emptyMark: { alignItems: "center", backgroundColor: "#EFECFF", borderRadius: radius.pill, height: 72, justifyContent: "center", width: 72 }, emptyMarkText: { color: colors.primary, fontSize: 34, fontWeight: "900" }, emptyTitle: { ...typography.heading, color: colors.text }, emptyText: { ...typography.body, color: colors.textMuted, maxWidth: 440, textAlign: "center" }, emptyButton: { marginTop: spacing.sm, minWidth: 190 },
   subHeader: { alignItems: "center", flexDirection: "row", gap: spacing.md, marginBottom: spacing.xl }, backButton: { alignItems: "center", backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.pill, borderWidth: 1, height: 44, justifyContent: "center", width: 44 }, backText: { color: colors.text, fontSize: 34, lineHeight: 36 }, formLayout: { alignItems: "flex-start", flexDirection: "row", flexWrap: "wrap", gap: spacing.xl }, imagePanel: { flex: 1, gap: spacing.sm, minWidth: 260 }, imagePlaceholder: { alignItems: "center", aspectRatio: 1, backgroundColor: "#F2F0F7", borderColor: colors.border, borderRadius: radius.lg, borderStyle: "dashed", borderWidth: 1, gap: spacing.sm, justifyContent: "center" }, imagePlaceholderMark: { color: colors.primary, fontSize: 48, fontWeight: "300" }, imagePlaceholderText: { ...typography.body, color: colors.textMuted, textAlign: "center" }, previewImage: { aspectRatio: 1, borderRadius: radius.lg, width: "100%" }, imageActions: { flexDirection: "row", gap: spacing.sm }, flexButton: { flex: 1 }, formCard: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, borderWidth: 1, flex: 1.4, gap: spacing.lg, minWidth: 300, padding: spacing.xl }, fieldGroup: { gap: spacing.xs }, fieldLabel: { ...typography.caption, color: colors.textMuted }, input: { ...typography.body, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, color: colors.text, minHeight: 48, outlineStyle: "none", paddingHorizontal: spacing.md } as never, twoColumns: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md }, flex: { flex: 1, minWidth: 150 },

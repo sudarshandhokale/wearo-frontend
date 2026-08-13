@@ -13,10 +13,10 @@ import { StylingRoutines } from "../components/StylingRoutines";
 import { useAuth } from "../auth/AuthContext";
 import { useAppData } from "../context/AppDataContext";
 import { useResponsive } from "../hooks/useResponsive";
-import type { AppScreen } from "../navigation/types";
+import type { Navigate } from "../navigation/types";
 import { colors, radius, shadows, spacing, typography } from "../theme";
 
-export function OutfitsScreen({ onNavigate }: { onNavigate: (screen: AppScreen) => void }) {
+export function OutfitsScreen({ initialOutfitRequest, onNavigate }: { initialOutfitRequest?: { id: number; outfitId: number | string } | null; onNavigate: Navigate }) {
   const { metadata } = useAppData();
   const { user } = useAuth();
   const { isMobile } = useResponsive();
@@ -36,6 +36,18 @@ export function OutfitsScreen({ onNavigate }: { onNavigate: (screen: AppScreen) 
     finally { setLoading(false); }
   }, []);
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    if (!initialOutfitRequest) return;
+    let cancelled = false;
+    setSection("looks");
+    setLoading(true);
+    setError(null);
+    void AppService.outfit(initialOutfitRequest.outfitId)
+      .then((response) => { if (!cancelled) setSelected(response.data); })
+      .catch((caughtError) => { if (!cancelled) setError(messageFor(caughtError)); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [initialOutfitRequest]);
 
   async function open(outfit: Outfit) { setLoading(true); setError(null); try { const response = await AppService.outfit(outfit.id); setSelected(response.data); } catch (caughtError) { setError(messageFor(caughtError)); } finally { setLoading(false); } }
   function changed(outfit: Outfit) { setSelected(outfit); setOutfits((current) => current.map((item) => item.id === outfit.id ? outfit : item)); }
