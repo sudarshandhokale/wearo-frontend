@@ -11,6 +11,7 @@ const configuredBaseUrl =
   "http://localhost:3000";
 
 export const API_BASE_URL = configuredBaseUrl.replace(/\/$/, "");
+export const NGROK_SKIP_BROWSER_WARNING_HEADER = { "ngrok-skip-browser-warning": "true" };
 
 type RequestOptions = {
   method?: "GET" | "POST" | "PATCH" | "DELETE";
@@ -55,7 +56,7 @@ export class RestService {
 
   private static async request<T>(path: string, options: RequestOptions): Promise<RestResult<T>> {
     const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
-    const headers: Record<string, string> = { Accept: "application/json" };
+    const headers: Record<string, string> = { Accept: "application/json", ...NGROK_SKIP_BROWSER_WARNING_HEADER };
 
     if (!isFormData) {
       headers["Content-Type"] = "application/json";

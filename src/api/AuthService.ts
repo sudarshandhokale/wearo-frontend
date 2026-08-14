@@ -1,5 +1,5 @@
 import type { ApiUser, AuthResponseData, ConsentInput, LoginParams, RegisterParams, RegistrationResult, UpdateUserParams } from "./types";
-import { API_BASE_URL, RestService } from "./RestService";
+import { API_BASE_URL, NGROK_SKIP_BROWSER_WARNING_HEADER, RestService } from "./RestService";
 import { Platform } from "react-native";
 import type { PickedImage } from "./AppService";
 
@@ -49,5 +49,5 @@ export class AuthService {
 
   static updateConsents(input: ConsentInput, token: string) { return RestService.PATCH<UserEnvelope>("/api/v1/me/consents", { consents: input }, token); }
   static deleteAccount(password: string, token: string) { return RestService.DELETE_WITH_BODY<{ message: string }>("/api/v1/me", { account: { password, confirmation: "DELETE" } }, token); }
-  static async exportAccount(token: string) { const response = await fetch(`${API_BASE_URL}/api/v1/me/export`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } }); const data = await response.json(); if (!response.ok) throw new Error(data?.error?.message || "Your data export could not be downloaded."); return data; }
+  static async exportAccount(token: string) { const response = await fetch(`${API_BASE_URL}/api/v1/me/export`, { headers: { Accept: "application/json", ...NGROK_SKIP_BROWSER_WARNING_HEADER, Authorization: `Bearer ${token}` } }); const data = await response.json(); if (!response.ok) throw new Error(data?.error?.message || "Your data export could not be downloaded."); return data; }
 }

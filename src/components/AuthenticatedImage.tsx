@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Image, Platform, StyleSheet, View, type ImageProps } from "react-native";
 
 import { resolveImageUrl } from "../api/AppService";
+import { NGROK_SKIP_BROWSER_WARNING_HEADER } from "../api/RestService";
 import { tokenStorage } from "../auth/tokenStorage";
 import { colors } from "../theme";
 
@@ -21,7 +22,7 @@ export function AuthenticatedImage({ url, ...props }: Omit<ImageProps, "source">
     setWebUri(null);
 
     void fetch(uri, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { ...NGROK_SKIP_BROWSER_WARNING_HEADER, Authorization: `Bearer ${token}` },
       signal: controller.signal
     }).then((response) => {
       if (!response.ok) throw new Error(`Image request failed (${response.status})`);
